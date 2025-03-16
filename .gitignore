@@ -1,2 +1,4 @@
-tascs_doo.txt
+*.pyc
+__pycache__
 .env
+tascs_doo.txt

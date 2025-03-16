@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
-from datetime import timedelta
+import sys
 from pathlib import Path
 import os
 from dotenv import load_dotenv
@@ -19,6 +19,7 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+DOMAIN_NAME = os.getenv('DOMAIN_NAME')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -42,6 +43,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
+    'users',
 
 ]
 
@@ -80,6 +83,8 @@ WSGI_APPLICATION = 'tasks_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+
+# Основные настройки базы данных (для продакшн-среды)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -90,6 +95,15 @@ DATABASES = {
         'PORT': os.getenv('DB_PORT'),
     }
 }
+
+# Если запускаются тесты, меняем базу данных на SQLite (in-memory)
+if 'test' in sys.argv:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': ':memory:',  # Используем in-memory базу данных для тестов
+    }
+
+
 
 
 # Password validation
@@ -136,8 +150,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework_simplejwt.token_blacklist'  # чтобы работал BLACKLIST_AFTER_ROTATION
-    )
+    ),
 }
 
 SIMPLE_JWT = {
