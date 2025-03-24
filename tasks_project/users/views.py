@@ -247,12 +247,13 @@ class ResetPasswordAPIView(APIView):
             token = default_token_generator.make_token(user)  # создает одноразовый токен используя данные юзера
             uid = urlsafe_base64_encode(force_bytes(user.pk))  # кодирует id юзера в Base64 (URL-безопасный формат)
             # чтобы передавать uid в URL без спецсимволов
-            reset_link = f"{DOMAIN_NAME}{reverse('reset_password')}{uid}/{token}"
+            # change_link = f"{DOMAIN_NAME}{reverse('change_password', kwargs=)}{uid}/{token}"
+            change_link = f'{DOMAIN_NAME}{reverse("change_password", kwargs={"uid": uid, "token": token})}'
 
             # Отправка email:
             send_mail(
                 "Восстановление пароля",
-                f"Перейдите по ссылке для сброса пароля: {reset_link}",
+                f"Перейдите по ссылке для сброса пароля: {change_link}",
                 "no-reply@yourdomain.com",
                 [email],
                 fail_silently=False,

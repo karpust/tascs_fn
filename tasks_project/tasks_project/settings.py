@@ -180,3 +180,10 @@ CORS_ALLOW_CREDENTIALS = True  # Для разрешения отправки co
 # CORS_ALLOWED_ORIGINS = [
 #     "http://your_frontend_domain.com",
 # ]
+
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND')
+EMAIL_HOST = os.getenv('EMAIL_HOST')
+EMAIL_PORT = os.getenv('EMAIL_PORT')
+EMAIL_USE_TLS = True  # шифрование данных
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')  # адрес с которого юзерам будут приходить подтверждения регистрации и пр
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
