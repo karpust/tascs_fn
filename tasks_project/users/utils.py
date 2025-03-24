@@ -2,6 +2,7 @@ import uuid
 from datetime import timedelta
 from django.core.cache import cache
 from django.core.mail import send_mail
+from django.urls import reverse
 from django.utils import timezone
 from tasks_project.settings import DOMAIN_NAME
 
@@ -33,15 +34,15 @@ def create_verification_link(user):
     """
     token, created_at, lifetime = generate_email_verification_token(user)
     expiration_time = created_at + lifetime
-    verification_link = f'{DOMAIN_NAME}/verify-email?token={token}&expires_at={expiration_time}'
-    # request.build_absolute_uri(reverse('verify-email'))
+    verification_link = f'{DOMAIN_NAME}{reverse("confirm_register")}?token={token}&expires_at={expiration_time}'
+    # request.build_absolute_uri(reverse('verify_email'))
     print(f"Sending verification email to {user.email} with URL: {verification_link}")
     return verification_link
 
 
 def send_verification_email(user):
     """Отправляет email с токеном и ссылкой для подтверждения."""
-    verification_link = create_verification_link(user)
+    verification_link = create_verification_link(user)  # request
 
     send_mail(
         'Подтверждение email',

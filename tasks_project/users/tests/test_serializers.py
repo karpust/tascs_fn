@@ -1,9 +1,6 @@
 from rest_framework.test import APITestCase
-from rest_framework import status
 from django.contrib.auth import get_user_model
-from rest_framework.exceptions import ValidationError
-from users.serializers import RegisterSerializer
-from django.core.exceptions import ValidationError as DjangoValidationError
+from users.serializers import RegisterSerializer, ChangePasswordSerializer
 
 User = get_user_model()
 # python manage.py test users.tests.test_serializers
@@ -37,6 +34,7 @@ class RegisterSerializerTest(APITestCase):
             'email': 'newuser@example.com',
             'password': 'strongpassword123',
         }
+
         serializer = RegisterSerializer(data=data)
 
         self.assertTrue(serializer.is_valid())
@@ -51,10 +49,9 @@ class RegisterSerializerTest(APITestCase):
             'password': 'strongpassword123',
         }
         serializer = RegisterSerializer(data=valid_data)
+
         self.assertTrue(serializer.is_valid(), serializer.errors)
-
         user = serializer.save()
-
         self.assertIsInstance(user, User)
         self.assertEqual(user.username, valid_data['username'])
         self.assertEqual(user.email, valid_data['email'])
@@ -70,7 +67,9 @@ class RegisterSerializerTest(APITestCase):
             'email': 'newuser@example.com',
             'password': 'strongpassword123',
         }
+
         serializer = RegisterSerializer(data=invalid_data)
+
         self.assertFalse(serializer.is_valid())
         self.assertIn('username', serializer.errors)
 
@@ -84,6 +83,7 @@ class RegisterSerializerTest(APITestCase):
             'email': 'newuser@example.com',
             'password': 'strongpassword123',
         }
+
         serializer = RegisterSerializer(data=invalid_data)
 
         self.assertFalse(serializer.is_valid())
@@ -117,6 +117,7 @@ class RegisterSerializerTest(APITestCase):
             'email': 'newuser@example.com',
             'password': 'short1',  # пароль слишком короткий
         }
+
         serializer = RegisterSerializer(data=data)
 
         # Проверка, что данные не валидны из-за слабого пароля
@@ -126,16 +127,42 @@ class RegisterSerializerTest(APITestCase):
                          'This password is too short. It must contain at least 8 characters.')
 
 
-    # def test_password_validates_successfully(self):
-    #     """
-    #     Проверка, что сериализатор правильно валидирует корректный пароль.
-    #     повторение теста
-    #     """
-    #     valid_password = "validpassword123"
-    #     try:
-    #         # Проверяем, что ошибка не возникает при корректном пароле
-    #         RegisterSerializer().validate_password(valid_password)
-    #     except ValidationError:
-    #         self.fail("Password validation raised ValidationError unexpectedly!")
+class ChangePasswordSerializerTest(APITestCase):
+
+    def test_passwords_match_and_valid(self):
+        data = {
+            "new_password": "new_password123",
+            "confirm_password": "new_password123"
+        }
+
+        serializer = ChangePasswordSerializer(data=data)
+
+        self.assertTrue(serializer.is_valid())
+        self.assertNotIn('new_password', serializer.errors)
+
+
+    def test_passwords_not_match(self):
+        invalid_data = {
+            "new_password": "new_password123",
+            "confirm_password": "other_password123"
+        }
+
+        serializer = ChangePasswordSerializer(data=invalid_data)
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('new_password', serializer.errors)
+        self.assertEqual(serializer.errors['new_password'][0], "Пароли не совпадают.")
+
+    def test_password_invalid_data(self):
+        invalid_data = {
+            "new_password": "pas123",
+            "confirm_password": "pas123"
+        }
+
+        serializer = ChangePasswordSerializer(data=invalid_data)
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('new_password', serializer.errors)
+
 
 

@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 import sys
+from datetime import timedelta
 from pathlib import Path
 import os
 from dotenv import load_dotenv
@@ -42,14 +43,18 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_extensions',  # auto import all models, ipython-autocomplete, so: python manage.py shell_plus --ipython
     'rest_framework',
-    'rest_framework_simplejwt.token_blacklist',
+    'rest_framework_simplejwt',
+    'corsheaders',
     'users',
+
 
 ]
 
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -149,11 +154,29 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # 'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'tasks_project.authentication.CookieJWTAuthentication',
     ),
 }
 
 SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": True,  # рефреши после использования обновляются
-    "BLACKLIST_AFTER_ROTATION": True,  # рефреши после обновления добавляются в черный список
+    "BLACKLIST_AFTER_ROTATION": True,  # а после обновления добавляются в черный список
+    'AUTH_COOKIE': 'access_token',  # где сервер будет искать токен - request.COOKIES["access_token"])
+    "SIGNING_KEY": SECRET_KEY,  # JWT подписываются этим ключом
+    # "AUTH_HEADER_TYPES": ("Bearer",),  # для передачи в заголовках
+    "AUTH_COOKIE_HTTP_ONLY": True,  # делает cookie невидимым для JavaScript - защита от атак
+    "AUTH_COOKIE_SECURE": True,  # чтобы куки отправлялись токлько по HTTPS; в localhost можно отключить, но включать в продакшене
+    "AUTH_COOKIE_SAMESITE": "Lax",  # чтобв cookie отправлялись только при навигации по сайту; предотвращение CSRF-атак
 }
+
+# Включаем безопасность для cookie
+SECURE_COOKIE = True  # Только через HTTPS, если в продакшене
+
+CORS_ALLOW_CREDENTIALS = True  # Для разрешения отправки cookies
+# CORS_ORIGIN_ALLOW_ALL = False  # Лучше указать только доверенные домены
+# CORS_ALLOWED_ORIGINS = [
+#     "http://your_frontend_domain.com",
+# ]

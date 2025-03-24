@@ -17,6 +17,7 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
         model = Group
         fields = ['url', 'name']
 
+
 class RegisterSerializer(serializers.ModelSerializer):
     # полностью переопределить поле:
     email = serializers.EmailField(required=True, validators=[UniqueValidator(queryset=User.objects.all())])
@@ -26,7 +27,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ['username', 'email', 'password']
         # изменить поле:
         extra_kwargs = {
-            'password': {  # working validator from django.contrib.auth.password_validation.MinimumLengthValidator min_length=8
+            'password': {
                 'write_only': True,
             },
             'username': {
@@ -36,6 +37,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         }
 
     def validate_password(self, value):
+        # применяет все валидаторы, зарегистрированные в AUTH_PASSWORD_VALIDATORS
+        # нет доп логики, можно было validators=[validate_password]
         try:
             validate_password(value)
         except ValidationError as e:
@@ -52,3 +55,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             is_active=False  # user is not active before confirm email
         )
         return user
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+
+    new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
+    confirm_password = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, data):
+        if data["new_password"] != data["confirm_password"]:
+            raise serializers.ValidationError({"new_password": "Пароли не совпадают."})
+        return data
+
+

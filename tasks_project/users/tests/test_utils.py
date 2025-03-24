@@ -3,6 +3,8 @@ import uuid
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.urls import reverse
+from freezegun import freeze_time
 # from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 
@@ -12,7 +14,8 @@ from django.utils import timezone
 from datetime import datetime
 from unittest.mock import patch
 from tasks_project.settings import DOMAIN_NAME
-from users.utils import generate_email_verification_token, create_verification_link, send_verification_email
+from users.utils import generate_email_verification_token, create_verification_link, send_verification_email, \
+    time_email_verification
 
 User = get_user_model()
 
@@ -43,6 +46,32 @@ class EmailVerificationUtilsTestCase(APITestCase):
         self.assertEqual(cached_data["user_id"], self.user.id)
         self.assertEqual(cached_data["created_at"], created_at)
 
+    def test_token_removal_from_cache_after_ttl(self):
+        """
+        проверяет, что токен удаляется из кэша, не превышая ttl;
+        TTL (Time-To-Live) — это время жизни ключа в кэше
+        """
+        # cache_backend = caches['default']  # см какой кэш юзаю
+        # print(cache_backend._cache)  # покажет все ключи и их значения
+        cache.clear()  # очистка кеша перед тестом - необязательно
+
+        with freeze_time("2025-03-19 12:00:00") as frozen:
+            # print("created at ", datetime.now())
+
+            # создаю токен со временем жизни time_email_verification:
+            token, _, _ = generate_email_verification_token(self.user)
+
+            # проверяю, что токен попал в кэш:
+            cached_token = cache.get(f"email_verification_token_{token}")
+            self.assertIsNotNone(cached_token)
+
+            # перемещаю время, чтобы токен истек:
+            frozen.tick(delta=timedelta(minutes=time_email_verification))  # 10 минут
+            # print("time pass...", datetime.now())
+
+            cached_token = cache.get(f"email_verification_token_{token}")
+            self.assertIsNone(cached_token)
+
     @patch('users.utils.generate_email_verification_token')
     def test_create_verification_link(self, mock_generate_token):
         """
@@ -56,7 +85,7 @@ class EmailVerificationUtilsTestCase(APITestCase):
 
         # create_verification_link вызывает mock_generate_token вместо generate_email_verification_token:
         verification_link = create_verification_link(self.user)
-        expected_link = f'{DOMAIN_NAME}/verify-email?token={mock_token}&expires_at={mock_created_at + mock_lifetime}'
+        expected_link = f'{DOMAIN_NAME}{reverse("confirm_register")}?token={mock_token}&expires_at={mock_created_at + mock_lifetime}'  # reverse('verify_email')  # /api/users/verify_email/
 
         # проверяю что ф-ция вызывается:
         mock_generate_token.assert_called_once()
@@ -69,14 +98,14 @@ class EmailVerificationUtilsTestCase(APITestCase):
         """
         Проверяет отправляется ли письмо-подтвержение
         """
-        mock_create_link.return_value = "http://testserver/verify-email?token=1234"
+        mock_create_link.return_value = "http://testserver/confirm_register?token=1234"
 
         send_verification_email(self.user)  # вызовет mock_create_link и mock_send_mail
 
         mock_create_link.assert_called_once_with(self.user)
         mock_send_mail.assert_called_once_with(
             'Подтверждение email',
-            'Пожалуйста, подтвердите свой email, перейдя по ссылке: http://testserver/verify-email?token=1234',
+            'Пожалуйста, подтвердите свой email, перейдя по ссылке: http://testserver/confirm_register?token=1234',
             'noreply@yourdomain.com',
             [self.user.email]
         )
