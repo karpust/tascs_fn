@@ -424,7 +424,7 @@ class ResetPasswordAPIViewTest(APITestCase):
         text = mail.outbox[0].body
         print(f'path: {text}')
         # регулярка для извлечения uid и token:
-        match = re.match(r"^.*/reset_password/(?P<uid>[^/]+)/(?P<token>[^/]+)/?$", text)
+        match = re.match(r"^.*/change_password/(?P<uid>[^/]+)/(?P<token>[^/]+)/?$", text)
         # проверяю, что uid и token присутствуют:
         self.assertIsNotNone(match, "URL не содержит uid и token")
         self.uid = match.group("uid")
@@ -452,7 +452,7 @@ class ResetPasswordAPIViewTest(APITestCase):
         print(f'called_kwargs: {called_kwargs}')  # fail_silently=False
         self.assertEqual(called_args[0], 'Восстановление пароля')
         self.assertRegex(called_args[1], r'Перейдите по ссылке для сброса пароля: '
-                                         r'http://localhost:8000/api/users/reset_password/.+/.+')
+                                         r'http://localhost:8000/api/users/change_password/.+/.+')
         self.assertEqual(called_args[2], 'no-reply@yourdomain.com')
         self.assertEqual(called_args[3], ['some_user@example.com'])
 
