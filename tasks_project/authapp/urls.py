@@ -1,7 +1,7 @@
 from django.urls import path
 
 # from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from users.views import RegisterAPIView, ConfirmRegisterAPIView, RepeatConfirmRegisterAPIView, LoginAPIView, LogoutAPIView, RefreshTokenAPIView, ResetPasswordAPIView, ChangePasswordAPIView
+from authapp.views import RegisterAPIView, ConfirmRegisterAPIView, RepeatConfirmRegisterAPIView, LoginAPIView, LogoutAPIView, RefreshTokenAPIView, ResetPasswordAPIView, ChangePasswordAPIView
 
 urlpatterns = [
     # path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),

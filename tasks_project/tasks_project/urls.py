@@ -17,7 +17,7 @@ Including another URLconf
 # from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
-from users.views import UserViewSet, GroupViewSet, RegisterAPIView, LoginAPIView
+from authapp.views import UserViewSet, GroupViewSet, RegisterAPIView, LoginAPIView
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet)  # for ViewSets
@@ -26,6 +26,6 @@ router.register(r'groups', GroupViewSet)
 urlpatterns = [
     # path('admin/', admin.site.urls),
     path('', include(router.urls)),
-    path('api/users/', include('users.urls')),
+    path('api/auth/', include('authapp.urls')),
 
 ]

@@ -1,9 +1,9 @@
 from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
-from users.serializers import RegisterSerializer, ChangePasswordSerializer
+from authapp.serializers import RegisterSerializer, ChangePasswordSerializer
+
 
 User = get_user_model()
-# python manage.py test users.tests.test_serializers
 
 
 class RegisterSerializerTest(APITestCase):

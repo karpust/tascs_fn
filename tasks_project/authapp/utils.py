@@ -36,7 +36,6 @@ def create_verification_link(user):
     expiration_time = created_at + lifetime
     verification_link = f'{DOMAIN_NAME}{reverse("confirm_register")}?token={token}&expires_at={expiration_time}'
     # request.build_absolute_uri(reverse('verify_email'))
-    print(f"Sending verification email to {user.email} with URL: {verification_link}")
     return verification_link
 
 

@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 from django.urls import reverse, resolve
-from users.views import RegisterAPIView, ConfirmRegisterAPIView, RepeatConfirmRegisterAPIView, LoginAPIView, \
+from authapp.views import RegisterAPIView, ConfirmRegisterAPIView, RepeatConfirmRegisterAPIView, LoginAPIView, \
     LogoutAPIView, RefreshTokenAPIView, ResetPasswordAPIView, ChangePasswordAPIView
 
 

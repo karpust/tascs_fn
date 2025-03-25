@@ -14,7 +14,7 @@ from django.utils import timezone
 from datetime import datetime
 from unittest.mock import patch
 from tasks_project.settings import DOMAIN_NAME
-from users.utils import generate_email_verification_token, create_verification_link, send_verification_email, \
+from authapp.utils import generate_email_verification_token, create_verification_link, send_verification_email, \
     time_email_verification
 
 User = get_user_model()
@@ -72,7 +72,7 @@ class EmailVerificationUtilsTestCase(APITestCase):
             cached_token = cache.get(f"email_verification_token_{token}")
             self.assertIsNone(cached_token)
 
-    @patch('users.utils.generate_email_verification_token')
+    @patch('authapp.utils.generate_email_verification_token')
     def test_create_verification_link(self, mock_generate_token):
         """
         Проверяет корректно ли генерируется ссылка подтверждения email
@@ -85,15 +85,15 @@ class EmailVerificationUtilsTestCase(APITestCase):
 
         # create_verification_link вызывает mock_generate_token вместо generate_email_verification_token:
         verification_link = create_verification_link(self.user)
-        expected_link = f'{DOMAIN_NAME}{reverse("confirm_register")}?token={mock_token}&expires_at={mock_created_at + mock_lifetime}'  # reverse('verify_email')  # /api/users/verify_email/
+        expected_link = f'{DOMAIN_NAME}{reverse("confirm_register")}?token={mock_token}&expires_at={mock_created_at + mock_lifetime}'  # reverse('verify_email')  # /api/authapp/verify_email/
 
         # проверяю что ф-ция вызывается:
         mock_generate_token.assert_called_once()
         # сравниваем результ работы create_verification_link и ссылку собраную вручную:
         self.assertEqual(verification_link, expected_link)
 
-    @patch('users.utils.send_mail')  # куда импортировали, оттуда и подменяем
-    @patch('users.utils.create_verification_link')  # ф-ция проверена выше, можно мокать
+    @patch('authapp.utils.send_mail')  # куда импортировали, оттуда и подменяем
+    @patch('authapp.utils.create_verification_link')  # ф-ция проверена выше, можно мокать
     def test_send_verification_email(self, mock_create_link, mock_send_mail):
         """
         Проверяет отправляется ли письмо-подтвержение

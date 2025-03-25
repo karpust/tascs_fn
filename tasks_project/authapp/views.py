@@ -11,8 +11,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from tasks_project.settings import DOMAIN_NAME
-from users.serializers import GroupSerializer, UserSerializer, RegisterSerializer, ChangePasswordSerializer
-from users.utils import send_verification_email
+from authapp.serializers import GroupSerializer, UserSerializer, RegisterSerializer, ChangePasswordSerializer
+from authapp.utils import send_verification_email
 from django.core.cache import cache
 from django.urls.base import reverse
 from django.conf import settings
@@ -23,7 +23,7 @@ from rest_framework.exceptions import AuthenticationFailed
 
 class UserViewSet(viewsets.ModelViewSet):
     """
-    API endpoint that allows users to be viewed or edited.
+    API endpoint that allows authapp to be viewed or edited.
     """
     queryset = User.objects.all().order_by('-date_joined')
     serializer_class = UserSerializer

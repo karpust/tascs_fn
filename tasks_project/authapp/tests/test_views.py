@@ -21,7 +21,7 @@ from django.core.cache import cache, caches
 from django.core import mail
 
 from tasks_project import settings
-from users.utils import create_verification_link, generate_email_verification_token, time_email_verification
+from authapp.utils import create_verification_link, generate_email_verification_token, time_email_verification
 from urllib.parse import urlparse
 
 User = get_user_model()
@@ -272,7 +272,7 @@ class LoginAPIViewTest(APITestCase):
         # print(f'---response.cookies is: {response.cookies}')
         # print(f'---self.client.cookies is: {self.client.cookies}')
         self.assertTrue(response.wsgi_request.user.is_authenticated)
-        # request = self.client.get('users/').wsgi_request
+        # request = self.client.get('/users/').wsgi_request
         # self.assertIsInstance(request.user, AbstractBaseUser)
 
 
@@ -433,7 +433,7 @@ class ResetPasswordAPIViewTest(APITestCase):
         self.assertTrue(self.token, "Token отсутствует")
 
 
-    @patch('users.views.send_mail')
+    @patch('authapp.views.send_mail')
     def test_reset_password_successfull(self, mock_send_mail):
 
         user_data = {
@@ -452,12 +452,12 @@ class ResetPasswordAPIViewTest(APITestCase):
         print(f'called_kwargs: {called_kwargs}')  # fail_silently=False
         self.assertEqual(called_args[0], 'Восстановление пароля')
         self.assertRegex(called_args[1], r'Перейдите по ссылке для сброса пароля: '
-                                         r'http://localhost:8000/api/users/change_password/.+/.+')
+                                         r'http://localhost:8000/api/auth/change_password/.+/.+')
         self.assertEqual(called_args[2], 'no-reply@yourdomain.com')
         self.assertEqual(called_args[3], ['some_user@example.com'])
 
 
-    @patch('users.views.send_mail')
+    @patch('authapp.views.send_mail')
     def test_reset_password_wrong_email(self, mock_send_mail):
 
         user_data = {
