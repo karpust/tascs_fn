@@ -166,31 +166,15 @@ class CommentSerializerTest(TestCase):
             "owner": self.user, # для бд, не для сериализации
         }
 
-        factory = APIRequestFactory()
-        self.request = factory.post("/fake-request/")
+        self.factory = APIRequestFactory()
+        self.request = self.factory.get("/fake-request/")
         self.request.user = self.user
-        # тк юзер берется из запроса:
-        # serializer = TaskSerializer(data=task_data, context={"request": self.request})
-        # self.assertTrue(serializer.is_valid(raise_exception=True))
-        # self.task = serializer.save()
         self.task = Task.objects.create(**task_data)
-        # print("Объект задачи успешно создан")
-
-        self.comment_valid_data = {
-            "id": 1,
-            "task": self.task.pk,
-            "text": "New Comment",
-        }
+        self.comment_valid_data = {"text": "New Comment"}
 
     def test_correct_serialization(self):
         """проверяю корректность сериализации объекта"""
-        # comment = Comment.objects.create(**self.comment_valid_data) так нельзя нужно передать юзера
-        serializer = CommentSerializer(data=self.comment_valid_data, context={"request": self.request})
-        serializer.is_valid(raise_exception=True)
-        print(serializer.data)
-        comment = serializer.save()
-        self.assertEqual(comment.author, self.user)  # проверяю что автор сохранился
-
+        comment = Comment.objects.create(task=self.task, text="New Comment", author=self.user)
         expected_data = {
             "id": 1,
             "task": self.task.pk,
@@ -204,37 +188,40 @@ class CommentSerializerTest(TestCase):
         self.assertEqual(serializer.data["text"], expected_data["text"])
         self.assertIn("created_at", serializer.data)
         self.assertIsInstance(serializer.data["created_at"], str)
-        # check that 'author' is HiddenField:
-        self.assertNotIn("author", serializer.data)
+        self.assertNotIn("author", serializer.data)  # HiddenField
 
     def test_deserialization_valid_data(self):
         """проверяю корректность десериализации валидных данных"""
-        serializer = CommentSerializer(data=self.comment_valid_data, context={"request": self.request})
-
+        serializer = CommentSerializer(data={"text": "New Comment", "task": self.task}, context={"request": self.request})
+        # проверяю начальные данные:
+        self.assertIn("task", serializer.initial_data)  # !
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data["task"], self.task)  # десериализуется в объект
-        self.assertEqual(serializer.validated_data["text"], self.comment_valid_data["text"])
-        # check that 'author' is HiddenField:
+        self.assertNotIn("task", serializer.validated_data)  # ! => read-only field
+        # проверяю что сериализатор добавил автора(HiddenField):
         self.assertIn("author", serializer.validated_data)
+        # но задача добавляется вьюшкой:
+        self.assertNotIn("task", serializer.validated_data)  # task is read-only field
+        # created_at после сохраниения объекта в бд:
         self.assertNotIn("created_at", serializer.validated_data)  # объект еще не сохранен
-        comment = serializer.save()
-        self.assertEqual(comment.author, self.user)
+
+        serializer.save(task=self.task)  # имитирую добавление задачи вьюшкой
+
         self.assertNotIn("author", serializer.data)  # вывод данных
-        self.assertIn("created_at", serializer.data)  # вывод данных
+        self.assertEqual(serializer.data["id"], 1)
+        self.assertEqual(serializer.data["task"], self.task.id)
+        self.assertEqual(serializer.data["text"], "New Comment")
         self.assertIsInstance(serializer.data["created_at"], str)
 
-    # def test_get_author_from_request(self):
-    #     """проверяю, что author добавляется из запроса"""
-    #     other_author = User.objects.create(username="author")
-    #
-    #     serializer = CommentSerializer(data=self.comment_valid_data, context={'request': self.request})
-    #     serializer.is_valid(raise_exception=True)
-    #     comment = serializer.save()
-    #     # self.assertNotIn("author", serializer.data)
-    #
-    #     self.assertNotEqual(comment.author, None)
-    #     self.assertNotEqual(comment.author, other_author)
-    #     self.assertEqual(comment.author, self.user)
+    def test_get_author_from_request(self):
+        """проверяю, что author добавляется из запроса"""
+        serializer = CommentSerializer(data=self.comment_valid_data, context={'request': self.request})
+        serializer.is_valid(raise_exception=True)
+        self.assertIn("author", serializer.validated_data)
+        comment = serializer.save(task=self.task)
+        self.assertNotIn("author", serializer.data)
+
+        self.assertNotEqual(comment.author, None)
+        self.assertEqual(comment.author, self.user)
 
     def test_deserialization_invalid_data(self):
         serializer = CommentSerializer(data={"text":""}, context={'request': self.request})
@@ -245,7 +232,6 @@ class CommentSerializerTest(TestCase):
         serializer = CommentSerializer(data={}, context={'request': self.request})
         serializer.is_valid()
 
-        # required fields:
         self.assertIn("text", serializer.errors)
         self.assertFalse(serializer.is_valid())
 

@@ -40,7 +40,7 @@ class TaskSerializer(serializers.ModelSerializer):
     #     return super().create(validated_data)
 
 class CommentSerializer(serializers.ModelSerializer):
-    # author = serializers.HiddenField(default=serializers.CurrentUserDefault()) делаю во вью
+    author = serializers.HiddenField(default=serializers.CurrentUserDefault())
     # заполняю автоматически и скрываю поля author, task
 
     # поле скрыто из входных данных (`HiddenField`)
@@ -52,4 +52,4 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = ["id", "task", "author", "text", "created_at"]
-        read_only_fields = ["task", "author", "created_at"]
+        read_only_fields = ["task", "created_at"]

@@ -53,7 +53,6 @@ class TaskPermission(permissions.BasePermission):
                 return request.method == 'PATCH' and set(request.data.keys()).issubset({'status', 'comments'}) or request.method == 'GET'
             return request.method == "GET"
 
-        return False
 
 """
 получает поля из request.data(из тела запроса на изменение)
