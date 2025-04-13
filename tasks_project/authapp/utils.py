@@ -1,5 +1,7 @@
 import uuid
 from datetime import timedelta
+
+from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.urls import reverse

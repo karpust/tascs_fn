@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'authapp',
+    'tasks',
 
 
 ]
@@ -156,11 +157,16 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         # 'rest_framework_simplejwt.authentication.JWTAuthentication',
         'tasks_project.authentication.CookieJWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
     ),
+    # 'DEFAULT_PARSER_CLASSES': [
+    #         'rest_framework.parsers.JSONParser',
+    #     ]
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": True,  # рефреши после использования обновляются
     "BLACKLIST_AFTER_ROTATION": True,  # а после обновления добавляются в черный список
@@ -173,7 +179,7 @@ SIMPLE_JWT = {
 }
 
 # Включаем безопасность для cookie
-SECURE_COOKIE = True  # Только через HTTPS, если в продакшене
+SECURE_COOKIE = False#True  # Только через HTTPS, если в продакшене
 
 CORS_ALLOW_CREDENTIALS = True  # Для разрешения отправки cookies
 # CORS_ORIGIN_ALLOW_ALL = False  # Лучше указать только доверенные домены

@@ -18,14 +18,29 @@ Including another URLconf
 from django.urls import path, include
 from rest_framework import routers
 from authapp.views import UserViewSet, GroupViewSet, RegisterAPIView, LoginAPIView
+from tasks.views import TaskViewSet, CategoryViewSet, TagViewSet, CommentViewSet
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet)  # for ViewSets
 router.register(r'groups', GroupViewSet)
+router.register(r'tasks', TaskViewSet)
+router.register(r'categories', CategoryViewSet)
+router.register(r'tags', TagViewSet)
+# router.register(r"comments", CommentViewSet)  # , basename="task-comments"
+
+# Вложенный роутер:
+from rest_framework_nested import routers
+comments_router = routers.NestedDefaultRouter(router, r'tasks', lookup='task')
+comments_router.register(r'comments', CommentViewSet, basename='task-comments')
+
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
     path('', include(router.urls)),
     path('api/auth/', include('authapp.urls')),
+    path('', include(comments_router.urls)),
+    # path('tasks/', include('tasks.urls')),
 
 ]
+
+
