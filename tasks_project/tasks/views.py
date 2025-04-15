@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from rest_framework.filters import OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, filters
 from rest_framework.generics import get_object_or_404
@@ -7,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from tasks.models import Task, Category, Tag, Comment
 from tasks.serializers import TaskSerializer, CategorySerializer, TagSerializer, CommentSerializer
+from .filters import TaskFilter
 from .permissions import TaskPermission, CommentPermission
 
 
@@ -14,6 +16,10 @@ class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
     serializer_class = TaskSerializer
     permission_classes = [TaskPermission]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = TaskFilter
+    ordering_fields = ['status', 'priority', 'title']  # 'created_at',
+    ordering = ["deadline"]  # '-created_at'
 
 
 class CommentViewSet(viewsets.ModelViewSet):

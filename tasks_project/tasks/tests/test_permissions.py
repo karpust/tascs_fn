@@ -158,6 +158,9 @@ class CommentPermissionTestCase(BasePermissionTestCase):
         редактировать частично, полностью, удалять ни owner этой задачи,
             ни авторизованный, ни другой executor этой задачи,
     """
+
+    # TODO проверь на неверный номер таски, на отсутствие таски с таким номером в бд
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -168,8 +171,6 @@ class CommentPermissionTestCase(BasePermissionTestCase):
         super().setUp()
         self.factory = APIRequestFactory()
         self.comment = MagicMock(author=self.author, task=self.task)
-
-
 
     @patch("tasks.permissions.Task.objects.get")
     def test_comment_post_by_each_user(self, mock_get):
