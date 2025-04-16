@@ -1,4 +1,6 @@
+from django.db.models import ExpressionWrapper, F, DurationField
 from django.shortcuts import render
+from django.utils.timezone import now
 from rest_framework.filters import OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, filters
@@ -18,9 +20,19 @@ class TaskViewSet(viewsets.ModelViewSet):
     permission_classes = [TaskPermission]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = TaskFilter
-    ordering_fields = ['status', 'priority', 'title']  # 'created_at',
-    ordering = ["deadline"]  # '-created_at'
+    ordering_fields = ['deadline', 'urgency', 'priority', 'status']
+    ordering = ['urgency']  # по умолчанию — срочные сверху
+    # /api/tasks/?ordering=urgency	срочные первыми
+    # /api/tasks/?ordering=-urgency	 cначала задачи с дальним дедлайном
+    # /api/tasks/?ordering=priority,-urgency  cначала по приоритету, потом по срочности
 
+    def get_queryset(self):
+        return Task.objects.annotate(
+            urgency=ExpressionWrapper(
+                F('deadline') - now(),
+                output_field=DurationField()
+            )
+        )
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all()

@@ -7,6 +7,8 @@ from django.utils.timezone import now
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient, force_authenticate
 from rest_framework_simplejwt.tokens import AccessToken
+
+from tasks.filters import TaskFilter
 from tasks.models import Task, Category, Tag, Comment
 
 User = get_user_model()
@@ -14,8 +16,11 @@ User = get_user_model()
 class BaseTestCase(APITestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.category = Category.objects.create(name='Test Category')
-        cls.tag = Tag.objects.create(name='Test Tag')
+        cls.category1 = Category.objects.create(name='New Category1')
+        cls.category2 = Category.objects.create(name='New Category2')
+        cls.category3 = Category.objects.create(name='Old Category3')
+        cls.tag1 = Tag.objects.create(name='some tag')
+        cls.tag2 = Tag.objects.create(name='just tag')
         cls.admin = cls.make_user("admin", "admin")
         cls.manager = cls.make_user('manager', 'manager')
         cls.user = cls.make_user("user", "user")
@@ -53,8 +58,8 @@ class BaseTestCase(APITestCase):
         self.client.cookies['access_token']['httponly'] = True
         self.client.cookies['access_token']['samesite'] = 'Lax'
 
-    def make_task(self, owner, executor, title="Task title",
-                  description="Task description", deadline=timezone.now() + timedelta(days=1), status="to_do", priority="low", category=None):
+    def make_task(self, owner, executor, title,
+                  description, deadline, status, priority, category, tags):
 
         task = Task.objects.create(
             title=title,
@@ -66,18 +71,20 @@ class BaseTestCase(APITestCase):
             category=category,
         )
         task.executor.set([executor])  # m2m
-        task.tags.set([self.tag])  # m2m
+        task.tags.set([tags])  # m2m
         return task
 
 class TaskFilterTest(BaseTestCase):
     def setUp(self):
-        self.task1 = self.make_task(self.owner, self.executor)
-        self.task2 = self.make_task(owner=self.owner, executor=self.executor, title="Design task",
+        self.task1 = self.make_task(owner=self.owner, executor=self.executor, title="Task title",
+                                    description="Task description", deadline=timezone.now() + timedelta(days=1),
+                                    status="to_do", priority="low", category=self.category1, tags=self.tag1)
+        self.task2 = self.make_task(owner=self.owner, executor=self.user, title="Design task",
                                     description="Update design", deadline=timezone.now()+timedelta(days=2),
-                                    status="in_progress", priority="medium", category=self.category)
-        self.task3 = self.make_task(owner=self.owner, executor=self.executor, title="Testing task",
+                                    status="in_progress", priority="medium", category=self.category2, tags=self.tag2)
+        self.task3 = self.make_task(owner=self.owner, executor=self.executor, title="Testing",
                                     description="Update homepage tests", deadline=timezone.now()+timedelta(days=3),
-                                    status="done", priority="high", category=self.category)
+                                    status="done", priority="high", category=self.category3, tags=self.tag1)
 
         self.list_url = reverse('task-list')
 
@@ -90,60 +97,163 @@ class TaskFilterTest(BaseTestCase):
         res = self.client.get(self.list_url, {"status": "to_do"})
         ids = self.get_ids(res)
 
-        self.assertIn(self.task1.id, ids)
-        self.assertNotIn(self.task2.id, ids)
-        self.assertNotIn(self.task3.id, ids)
+        self.assertEqual(set(ids), {self.task1.id})
 
     def test_filter_by_priority(self):
         self.make_authenticated(self.user)
         res = self.client.get(self.list_url, {"priority": "medium"})
         ids = self.get_ids(res)
 
-        self.assertIn(self.task2.id, ids)
-        self.assertNotIn(self.task1.id, ids)
-        self.assertNotIn(self.task3.id, ids)
+        self.assertEqual(set(ids), {self.task2.id})
 
     def test_filter_by_owner(self):
         self.make_authenticated(self.user)
         res = self.client.get(self.list_url, {"owner": self.owner.id})
         ids = self.get_ids(res)
 
-        self.assertIn(self.task1.id, ids)
-        self.assertIn(self.task2.id, ids)
-        self.assertIn(self.task3.id, ids)
+        self.assertEqual(set(ids), {self.task1.id, self.task2.id, self.task3.id})
+
+    def test_filter_by_owner_username(self):
+        self.make_authenticated(self.user)
+        res = self.client.get(self.list_url, {"owner__username": "owner"})
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {self.task1.id, self.task2.id, self.task3.id})
 
     def test_filter_by_executor(self):
         self.make_authenticated(self.user)
         res = self.client.get(self.list_url, {"executor": self.executor.id})
         ids = self.get_ids(res)
 
-        self.assertIn(self.task1.id, ids)
-        self.assertIn(self.task2.id, ids)
-        self.assertIn(self.task3.id, ids)
+        self.assertEqual(set(ids), {self.task1.id, self.task3.id})
 
-    def test_search_by_text(self):
+    def test_filter_by_deadline_range(self):
         self.make_authenticated(self.user)
-        res = self.client.get(self.list_url, {"search": "design"})
+        data = {
+            "deadline_after": (timezone.now() + timedelta(days=0)).isoformat(),
+            "deadline_before": (timezone.now() + timedelta(days=2)).isoformat()
+        }
+        res = self.client.get(self.list_url, data)
         ids = self.get_ids(res)
 
-        self.assertIn(self.task2.id, ids)
-        self.assertNotIn(self.task1.id, ids)
+        self.assertEqual(set(ids), {self.task1.id, self.task2.id})
 
-    def test_ordering_by_priority_desc(self):
+    def test_filter_by_tags(self):
         self.make_authenticated(self.user)
-        res = self.client.get(self.list_url, {"ordering": "-priority"})
-        priorities = [t["priority"] for t in res.json()]
-        print(priorities)
-        self.assertEqual(priorities, sorted(priorities, reverse=True))
+        data = {"tags": self.tag1.id}
+        res = self.client.get(self.list_url, data)
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {self.task1.id, self.task3.id})
+
+    def test_search_filter_title(self):
+        self.make_authenticated(self.user)
+        res = self.client.get(self.list_url, {"search": "task"})
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {self.task1.id, self.task2.id})
+
+    def test_search_filter_description(self):
+        self.make_authenticated(self.user)
+        res = self.client.get(self.list_url, {"search": "update"})
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {self.task2.id, self.task3.id})
+
+    def test_search_filter_comments(self):
+        comment1 = Comment.objects.create(text="simple comment", task=self.task1, author=self.owner)
+        comment2 = Comment.objects.create(text="super comment", task=self.task2, author=self.user)
+        comment3 = Comment.objects.create(text="super comment", task=self.task3, author=self.executor)
+
+        self.make_authenticated(self.user)
+        res = self.client.get(self.list_url, {"search": "super comment"})
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {comment2.id, comment3.id})
+
+    def test_search_filter_tag(self):
+        self.make_authenticated(self.user)
+        res = self.client.get(self.list_url, {"search": "just tag"})
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {self.task2.id})
+
+    def test_search_filter_category(self):
+        self.make_authenticated(self.user)
+        res = self.client.get(self.list_url, {"search": "new"})
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {self.task1.id, self.task2.id})
+
+    def test_search_filter_multiple_fields(self):
+        self.make_authenticated(self.user)
+        res = self.client.get(self.list_url, {"search": "task"})
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {self.task1.id, self.task2.id})
+
+    def test_combined_filters(self):
+        self.make_authenticated(self.user)
+        data = {
+            "owner__username": "owner",
+            "executor__username": "user",
+            "deadline_after": (timezone.now() + timedelta(days=1)).isoformat(),
+            "search": "new",
+        }
+        res = self.client.get(self.list_url, data)
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {self.task2.id})
 
     def test_ordering_by_deadline(self):
         self.make_authenticated(self.user)
+        data = {"ordering": "deadline"}
+        res = self.client.get(self.list_url, data)
+        ids = self.get_ids(res)
+        self.assertEqual(ids, [self.task1.id, self.task2.id, self.task3.id])
 
-        res = self.client.get(self.list_url, {"ordering": "deadline"})
-        deadline = [t["deadline"] for t in res.json()]
-        print(deadline)
-        print(sorted(deadline))
-        self.assertEqual(deadline, sorted(deadline))
+        data = {"ordering": "-deadline"}
+        res = self.client.get(self.list_url, data)
+        ids = self.get_ids(res)
+        self.assertEqual(ids, [self.task3.id, self.task2.id, self.task1.id])
+
+    def test_ordering_by_urgency(self):
+        self.make_authenticated(self.user)
+        data = {"ordering": "urgency"}
+        res = self.client.get(self.list_url, data)
+        ids = self.get_ids(res)
+        self.assertEqual(ids, [self.task1.id, self.task2.id, self.task3.id])
+
+        data = {"ordering": "-urgency"}
+        res = self.client.get(self.list_url, data)
+        ids = self.get_ids(res)
+        self.assertEqual(ids, [self.task3.id, self.task2.id, self.task1.id])
+
+    def test_ordering_by_priority_and_urgency(self):
+        self.make_authenticated(self.user)
+        data = {"ordering": "prioriry, -urgency"}
+        res = self.client.get(self.list_url, data)
+        ids = self.get_ids(res)
+        self.assertEqual(ids, [self.task3.id, self.task2.id, self.task1.id])
+
+    def test_ordering_by_default(self):
+        self.make_authenticated(self.user)
+        res = self.client.get(self.list_url)
+        ids = self.get_ids(res)
+
+        self.assertEqual(ids, [self.task1.id, self.task2.id, self.task3.id])
+
+    # def test_ordering_by_priority_desc(self):
+    #     self.make_authenticated(self.user)
+    #     res = self.client.get(self.list_url, {"ordering": "priority"})
+    #     ids = self.get_ids(res)
+    #     self.assertEqual(ids, [self.task3.id, self.task2.id, self.task1.id])
+    #
+    # def test_ordering_by_status(self):
+    #     self.make_authenticated(self.user)
+    #     res = self.client.get(self.list_url, {"ordering": "priority"})
+    #     ids = self.get_ids(res)
+    #     self.assertEqual(ids, [self.task3.id, self.task2.id, self.task1.id])
 
 # class BaseTaskTestCase(BaseTestCase):
 #

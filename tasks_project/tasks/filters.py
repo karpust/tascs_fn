@@ -1,59 +1,46 @@
 import django_filters
+from django.contrib.auth import get_user_model
 from django.db.models import Q
-from .models import Task
+from .models import Task, Tag
 
-"""
-В API предусмотрена система фильтрации задач по ключевым параметрам:
-status – фильтрация по статусу задачи (например: todo, in_progress, done).
-priority – по приоритету (low, medium, high).
-executor – по назначенному пользователю (ID пользователя).
-owner – по создателю задачи (ID пользователя).
---is_done – фильтрация по признаку завершённости (true / false).
-created_after, created_before – по дате создания (формат: YYYY-MM-DD).
-due_after, due_before – по сроку дедлайна.
-search – текстовый поиск по названию и описанию задачи.
-
-сортировка (ordering) по:
-created_at – дате создания,
-priority – приоритету,
-title – названию.
-"""
-
+User = get_user_model()
 
 class TaskFilter(django_filters.FilterSet):
-    created_after = django_filters.DateFilter(field_name="created_at", lookup_expr="gte")
-    created_before = django_filters.DateFilter(field_name="created_at", lookup_expr="lte")
-    due_after = django_filters.DateFilter(field_name="due_date", lookup_expr="gte")
-    due_before = django_filters.DateFilter(field_name="due_date", lookup_expr="lte")
-    # has_due_date = django_filters.BooleanFilter(method='filter_has_due_date')
+    # custom:
+    deadline_after = django_filters.DateTimeFilter(field_name="deadline", lookup_expr="gte")
+    deadline_before = django_filters.DateTimeFilter(field_name="deadline", lookup_expr="lte")
+    # GET /api/tasks/?deadline_after=2025-04-10T00:00:00&deadline_before=2025-04-20T23:59:59
+    # owner = django_filters.ModelChoiceFilter(field_name='owner', queryset=User.objects.all()) make auto
+    # GET /api/tasks/?owner=3
+    owner__username = django_filters.CharFilter(field_name="owner__username", lookup_expr="iexact")
+    executor__username = django_filters.CharFilter(field_name="executor__username", lookup_expr="iexact")
+    # GET /api/tasks/?owner__username=johndoe
+    # executor = django_filters.ModelMultipleChoiceFilter(
+    #     field_name='executor',
+    #     to_field_name='id',
+    #     queryset=User.objects.all()
+    # )  # GET /api/tasks/?executor=1&executor=3
+    tags = django_filters.ModelMultipleChoiceFilter(
+        field_name='tags',
+        to_field_name='id',
+        queryset=Tag.objects.all()
+    )  # GET /api/tasks/?tags=2&tags=4
+
     search = django_filters.CharFilter(method='filter_search')
 
     class Meta:
         model = Task
-        fields = [
-            'status',
-            'priority',
-            'executor',
-            'owner',
-        ]
+        fields = ['status', 'priority',
+                  "deadline_after", "deadline_before",
+                  'owner', "owner__username",
+                  'executor', "tags", "search" ]  # here exact or custom
 
-    # def filter_has_due_date(self, queryset, name, value):
-    #     if value:
-    #         return queryset.exclude(due_date__isnull=True)
-    #     return queryset.filter(due_date__isnull=True)
-
-    def filter_search(self, queryset, name, value):
+    def filter_search(self, queryset, name, value):  # name	- filter name "search"
         return queryset.filter(
-            Q(title__icontains=value) | Q(description__icontains=value)
-        )
+            Q(title__icontains=value) |
+            Q(description__icontains=value) |
+            Q(comments__text__icontains=value) |
+            Q(tags__name__icontains=value) |
+            Q(category__name__icontains=value)
+        ).distinct()
 
-"""
-
-class TaskViewSet(ModelViewSet):
-    queryset = Task.objects.all()
-    serializer_class = TaskSerializer
-    filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_class = TaskFilter
-    ordering_fields = ['created_at', 'due_date', 'priority', 'title']
-    ordering = ['-created_at']  # дефолтная сортировка
-"""
