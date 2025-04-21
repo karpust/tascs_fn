@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'authapp',
     'tasks',
+    'django_filters',
 
 
 ]
@@ -166,7 +167,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": True,  # рефреши после использования обновляются
     "BLACKLIST_AFTER_ROTATION": True,  # а после обновления добавляются в черный список

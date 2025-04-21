@@ -24,17 +24,15 @@ class BaseTaskModelTests(TestCase):
 
         cls.user = User.objects.create_user(
             username="some_user",
-            email="some_user@example.com",
             password="some_user_password123",
-            is_active=True
         )
         cls.task = Task(
             id=1,
             title='some_task',
             description='some_description',
-            status='done',
+            status=3,
             deadline=timezone.now(),
-            priority='high',
+            priority=3,
             owner=cls.user,
         )
         cls.task.executor.add(cls.user)  # no need save after
@@ -50,9 +48,9 @@ class BaseTaskModelTests(TestCase):
 
     def setUp(self):
         """обновляю объекты перед каждым тестом, на случай изменения тестом"""
-        self.task = Task.objects.get(id=self.task.pk)
-        self.user = User.objects.get(id=self.user.pk)
-        self.comment = Comment.objects.get(id=self.comment.pk)
+        self.task = Task.objects.get(id=self.task.id)
+        self.user = User.objects.get(id=self.user.id)
+        self.comment = Comment.objects.get(id=self.comment.id)
 
 
 class TaskModelTests(BaseTaskModelTests):
@@ -60,9 +58,9 @@ class TaskModelTests(BaseTaskModelTests):
     def test_task_correct_creation(self):
         self.assertEqual(self.task.title, 'some_task')
         self.assertEqual(self.task.description, 'some_description')
-        self.assertEqual(self.task.status, 'done')
+        self.assertEqual(self.task.status, 3)
         self.assertIsNotNone(self.task.deadline)
-        self.assertEqual(self.task.priority, 'high')
+        self.assertEqual(self.task.priority, 3)
         self.assertEqual(self.task.owner, self.user)
         self.assertEqual(list(self.task.executor.all()), [self.user])
 
@@ -70,12 +68,7 @@ class TaskModelTests(BaseTaskModelTests):
         """обязательные поля не могут быть пустыми"""
 
         # создаю объект с пустыми обязательными полями:
-        invalid_task = Task(
-            id=2,
-            # title='',
-            # deadline=None,
-            # owner=None,  # можно вообще не передавать как и executor
-        )
+        invalid_task = Task(id=2)
 
         with self.assertRaises(ValidationError) as context:
             invalid_task.full_clean()
@@ -83,13 +76,11 @@ class TaskModelTests(BaseTaskModelTests):
 
         # проверяю, что каждое обязательное поле дает ошибку:
         self.assertIn('title', validation_errors)
-        self.assertIn('deadline', validation_errors)
         self.assertIn('owner', validation_errors)
         self.assertIn('executor', validation_errors)
 
         # проверяю конкретные сообщения об ошибке для каждого поля:
         self.assertIn('This field cannot be blank.', validation_errors['title'])
-        self.assertIn('This field cannot be null.', validation_errors['deadline'])
         self.assertIn('This field cannot be null.', validation_errors['owner'])
         self.assertIn('This field cannot be null. Need to choose at least one executor.', validation_errors['executor'])
 
@@ -104,14 +95,14 @@ class TaskModelTests(BaseTaskModelTests):
         )
 
         # check default data was set correct:
-        self.assertEqual(task.status, 'to_do')
-        self.assertEqual(task.priority, 'medium')
+        self.assertEqual(task.status, 1)
+        self.assertEqual(task.priority, 1)
 
     def test_correct_priority_choices(self):
         """проверка choices поля priority"""
 
-        valid_priorities = ['low', 'medium', 'high']
-        invalid_priorities = ['Low', 'HIGH', 'urgent']
+        valid_priorities = [1, 2, 3]
+        invalid_priorities = [0, 4]
 
         # test valid priorities:
         for val in valid_priorities:
@@ -135,8 +126,8 @@ class TaskModelTests(BaseTaskModelTests):
     def test_correct_status_choices(self):
         """проверка choices поля status"""
 
-        valid_status = ['to_do', 'in_progress', 'done']
-        invalid_status = ['To do', 'INPROGRESS', 'super_done']
+        valid_status = [1, 2, 3]
+        invalid_status = [0, 4]
 
         # test valid priorities:
         for val in valid_status:
@@ -210,12 +201,3 @@ class TagModelTest(TestCase):
         """Test that tag names are unique"""
         with self.assertRaises(IntegrityError):
             Tag.objects.create(name="Django")
-
-
-
-
-
-
-
-
-

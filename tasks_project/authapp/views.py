@@ -47,8 +47,7 @@ class RegisterAPIView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)  # нет инстанса, значит создание а не обновление
-        # request.data — данные, отправлены пользователем в теле POST-запроса: имя, почта и пароль
+        serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
 
@@ -60,15 +59,11 @@ class RegisterAPIView(APIView):
                            "Пожалуйста, пройдите по ссылке из письма."
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        # кроме статуса вернет и словарь, где ключи имена полей,
-        # а значения — списки ошибок, связанных с каждым полем
-
 
 class ConfirmRegisterAPIView(APIView):
     """Обработчик для подтверждения email через GET-запрос."""
 
     permission_classes = [permissions.AllowAny]
-
     queryset = User.objects.all()
 
     def get(self, request):
@@ -208,7 +203,7 @@ class RefreshTokenAPIView(APIView):
     Вызывается клиентом для обновления рефреш-токена,
     когда он получает ответ сервера 401 Unauthorized или
     заранее вычислив время истечения токена.
-    Лучше автоматически обновлять токен за 1 минуту до истечения.
+    настроить фронт чтобы автоматически обновлять токен за 1 минуту до истечения.
     """
 
     permission_classes = [AllowAny]  # IsAuthenticated будет требовать действительный access_token, а он возможно истек и есть только refresh
@@ -233,6 +228,16 @@ class RefreshTokenAPIView(APIView):
             samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
             max_age=15 * 60,  # 15 минут
         )
+
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=settings.SIMPLE_JWT["AUTH_COOKIE_SECURE"],
+            samesite=settings.SIMPLE_JWT["AUTH_COOKIE_SAMESITE"],
+            max_age=1 * 24 * 60 * 60,  # 1 day
+        )
+
         return response
 
 

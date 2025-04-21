@@ -1,6 +1,11 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
+
+
 User = get_user_model()
 
 
@@ -17,6 +22,18 @@ class Tag(models.Model):
     def __str__(self):
         return self.name
 
+class TaskStatus(models.IntegerChoices):
+    TO_DO = 1, "to_do"
+    IN_PROGRESS = 2, "in_progress"
+    DONE = 3, "done"
+
+class TaskPriority(models.IntegerChoices):
+    LOW = 1, "low"
+    MEDIUM = 2, "medium"
+    HIGH = 3, "high"
+
+def default_deadline():
+    return timezone.now() + timedelta(days=1)
 
 class Task(models.Model):
 
@@ -34,9 +51,9 @@ class Task(models.Model):
 
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='to_do')
-    deadline = models.DateTimeField()
-    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    status = models.IntegerField(choices=TaskStatus, default=TaskStatus.TO_DO)
+    deadline = models.DateTimeField(default=default_deadline)
+    priority = models.IntegerField(choices=TaskPriority, default=TaskPriority.LOW)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='task_owner')
     executor = models.ManyToManyField(User, related_name='task_executors')
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)

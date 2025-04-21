@@ -1,6 +1,8 @@
 from django.contrib.auth.models import  AnonymousUser
 from rest_framework.parsers import JSONParser
 from rest_framework.request import Request
+
+from tasks.models import Task
 from tasks.permissions import TaskPermission, CommentPermission
 from unittest.mock import MagicMock, patch
 from rest_framework.test import APIRequestFactory, APITestCase, force_authenticate
@@ -203,6 +205,24 @@ class CommentPermissionTestCase(BasePermissionTestCase):
             force_authenticate(wsgi_request, user=user)
             request = Request(wsgi_request)
             self.assertTrue(self.permission.has_permission(request, view=mock_view))
+
+    def test_comment_post_invalid_task_id(self):
+        mock_view = MagicMock()
+        mock_view.kwargs = {'task_pk': ''}
+        wsgi_request = self.factory.post('/')
+        force_authenticate(wsgi_request, user=self.owner)
+        request = Request(wsgi_request)
+        self.assertFalse(self.permission.has_permission(request, mock_view))
+
+    @patch("tasks.permissions.Task.objects.get")
+    def test_comment_post_nonexistent_task_id(self, mock_get):
+        mock_view = MagicMock()
+        mock_view.kwargs = {'task_pk': '99'}
+        mock_get.side_effect = Task.DoesNotExist
+        wsgi_request = self.factory.post('/')
+        force_authenticate(wsgi_request, user=self.owner)
+        request = Request(wsgi_request)
+        self.assertFalse(self.permission.has_permission(request, mock_view))
 
     def test_comment_all_by_author(self):
         """коммент уже создан автором"""

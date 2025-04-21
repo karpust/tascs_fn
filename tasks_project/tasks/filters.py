@@ -20,11 +20,11 @@ class TaskFilter(django_filters.FilterSet):
     #     to_field_name='id',
     #     queryset=User.objects.all()
     # )  # GET /api/tasks/?executor=1&executor=3
-    tags = django_filters.ModelMultipleChoiceFilter(
-        field_name='tags',
-        to_field_name='id',
-        queryset=Tag.objects.all()
-    )  # GET /api/tasks/?tags=2&tags=4
+    # tags = django_filters.ModelMultipleChoiceFilter(
+    #     field_name='tags',
+    #     to_field_name='id',
+    #     queryset=Tag.objects.all()
+    # )  # GET /api/tasks/?tags=2&tags=4
 
     search = django_filters.CharFilter(method='filter_search')
 

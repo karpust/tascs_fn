@@ -13,12 +13,14 @@ from freezegun import freeze_time
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
+from rest_framework.response import Response
 # from django.test.utils import freeze_time
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from django.urls import reverse
 from django.core.cache import cache, caches
 from django.core import mail
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from tasks_project import settings
 from authapp.utils import create_verification_link, generate_email_verification_token, time_email_verification
@@ -343,6 +345,32 @@ class LoginAPIViewTest(APITestCase):
                 self.assertFalse(response.wsgi_request.user.is_authenticated)
 
 
+class JwtBaseTestCase(APITestCase):
+    def make_authenticated(self, user):
+        """
+        состояние кук (access_token) привязано к тестовому клиенту self.client
+        при вызове self.client.get('/api/data/') автоматически передаются все куки,
+        которые были установлены ранее для юзера.
+        сервер берет куку и получает из ее токена юзера.
+        если выполнили self.make_authenticated(admin) в тесте, то теперь
+        все запросы через self.client будут аутентифицироваться как admin
+        чтобы тестировать разных пользователей в одном тесте, нужно пересоздавать клиент self.client = APIClient()
+        или делать перезапись кук - make_authenticated(другой юзер)
+        полностью перезаписывает все куки клиента, а не добавляет новые. Это жесткая замена, а не обновление.
+        """
+        self.access_token = str(AccessToken.for_user(user))
+        self.refresh_token = str(RefreshToken.for_user(user))
+
+        # запись куки с токеном - это полная перезапись кук а не добавление:
+        self.client.cookies.load({
+            'access_token': self.access_token,
+            'refresh_token': self.refresh_token,
+        })
+        # добавляю параметры загруженному токену:
+        self.client.cookies['access_token']['httponly'] = True
+        self.client.cookies['access_token']['samesite'] = 'Lax'
+
+
 class LogoutAPIViewTest(APITestCase):
     def setUp(self):
 
@@ -394,6 +422,44 @@ class LogoutAPIViewTest(APITestCase):
 
         print("Логаут успешен! Cookies очищены.")
 
+
+class RefreshTokenAPITestCase(JwtBaseTestCase):
+    def setUp(self):
+        # создаю юзера и логиню его:
+        self.user = User.objects.create_user(
+            username="some_user",
+            email="some_user@example.com",
+            password="some_user_password123",
+            is_active=True)
+
+        # self.client = APIClient()
+        self.url = reverse("refresh_token")
+        self.refresh_token = str(RefreshToken.for_user(self.user))
+
+    def test_refresh_token_successfull(self):
+        # self.make_authenticated(self.user)
+        self.client.cookies["refresh_token"] = self.refresh_token
+        response = self.client.post(self.url)
+        print(response.cookies)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access_token", response.cookies)
+        self.assertIn("refresh_token", response.cookies)
+
+    def test_refresh_token_missing(self):
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data['detail'], 'Токен обновления отсутствует')
+        self.assertNotIn("refresh_token", response.cookies)
+        self.assertNotIn("access_token", response.cookies)
+
+    def test_refresh_token_invalid(self):
+        self.client.cookies['refresh_token'] = "invalid.refreshed.token"
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data['detail'], 'Недействительный refresh-токен')
 
 class ResetPasswordAPIViewTest(APITestCase):
 

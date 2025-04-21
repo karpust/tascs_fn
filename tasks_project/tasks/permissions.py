@@ -76,11 +76,11 @@ class CommentPermission(permissions.BasePermission):
             # from tasks.models import Task  # Импорт здесь, чтобы избежать циклов
             try:
                 task = Task.objects.get(id=task_id)
-            except (ValueError, Task.DoesNotExist):  # invalid data
+                view.task = task
+            except (ValueError, Task.DoesNotExist):
                 return False
 
             return request.user in task.executor.all() or request.user == task.owner
-
         return True
 
     def has_object_permission(self, request, view, obj):
@@ -93,7 +93,6 @@ class CommentPermission(permissions.BasePermission):
 
         if request.method in ("PUT", "PATCH", "DELETE"):
             return request.user == obj.author
-
         return True
 
 

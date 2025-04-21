@@ -48,7 +48,8 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # автоматически привязываю задачу и автора:
-        task = Task.objects.get(id=self.kwargs['task_pk'])
+        # task = Task.objects.get(id=self.kwargs['task_pk'])
+        task = getattr(self, "task", None) or Task.objects.get(id=self.kwargs['task_pk'])
         serializer.save(task=task) # author=self.request.user,
 
 
