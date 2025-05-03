@@ -19,13 +19,18 @@ from django.urls import path, include
 from rest_framework import routers
 from authapp.views import UserViewSet, GroupViewSet, RegisterAPIView, LoginAPIView
 from tasks.views import TaskViewSet, CategoryViewSet, TagViewSet, CommentViewSet
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet)  # for ViewSets
 router.register(r'groups', GroupViewSet)
 router.register(r'tasks', TaskViewSet)
-router.register(r'categories', CategoryViewSet)
-router.register(r'tags', TagViewSet)
+# router.register(r'categories', CategoryViewSet)
+# router.register(r'tags', TagViewSet)
 # router.register(r"comments", CommentViewSet)  # , basename="task-comments"
 
 # Вложенный роутер:
@@ -40,6 +45,9 @@ urlpatterns = [
     path('api/auth/', include('authapp.urls')),
     path('', include(comments_router.urls)),
     # path('tasks/', include('tasks.urls')),
+    path('schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
 ]
 

@@ -1,3 +1,4 @@
+from django.contrib.admin.utils import help_text_for_field
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.models import Group, User
@@ -6,20 +7,22 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.mail import send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from rest_framework import permissions, viewsets, status
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter, OpenApiResponse, inline_serializer
+from rest_framework import permissions, viewsets, status, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
 from tasks_project.settings import DOMAIN_NAME
-from authapp.serializers import GroupSerializer, UserSerializer, RegisterSerializer, ChangePasswordSerializer
-from authapp.utils import send_verification_email
+from authapp.serializers import GroupSerializer, UserSerializer, RegisterSerializer, ChangePasswordSerializer, \
+    LoginSerializer, ResetPasswordSerializer, RepeatConfirmRegisterSerializer, GenericResponseSerializer
+from authapp.utils import send_verification_email, generate_email_verification_token, create_verification_link
 from django.core.cache import cache
 from django.urls.base import reverse
 from django.conf import settings
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import AuthenticationFailed
-
+from tasks_project import settings
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -39,39 +42,166 @@ class GroupViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     # authentication_classes = [JWTAuthentication]
 
+
 class RegisterAPIView(APIView):
     """
-    API endpoint регистрации пользователя
+    Регистрации пользователя.
+    Пользователь вводит имя, пароль, email-адрес.
+    Если данные верны, получает на почту письмо,
+    содержащее ссылку, для подтверждения регистрации.
     """
     # renderer_classes = [JSONRenderer, BrowsableAPIRenderer]
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(
+        tags=['Authentication'],
+        # auth=[],  # <-- это обнулит security для этого метода
+        summary="Регистрация пользователя",
+        description="Создает нового пользователя и отправляет ссылку на email для подтверждения регистрации.",
+        request=RegisterSerializer,
+        responses={
+            201: OpenApiResponse(
+                description="Успешная регистрация",
+                response=GenericResponseSerializer,
+            ),
+            400: OpenApiResponse(
+                description="Ошибка регистрации",
+                response=GenericResponseSerializer,
+            )
+        },
+        examples=[
+            OpenApiExample(
+                "Пример ошибок",
+                value={
+                    "username": ["Ensure this field has at least 3 characters."],
+                    "email": ["This field must be unique."],
+                    "password": ["This password is too short. It must contain at least 8 characters."]
+                },
+                response_only=True,  # signal that example only applies to responses
+                status_codes=[400]
+            ),
+            OpenApiExample(
+                "Пример удачного выполнения",
+                value={
+                    "message": "Спасибо за регистрацию! На ваш email было отправлено письмо-подтверждение. Пожалуйста, пройдите по ссылке из письма."
+                },
+                response_only=True,  # signal that example only applies to responses
+                status_codes=[201]
+            ),
+        ]
+    )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
 
-            send_verification_email(user)  # вызывает send_mail
-
-            return Response({
+            response_data = {
                 "message": "Спасибо за регистрацию! "
                            "На ваш email было отправлено письмо-подтверждение. "
                            "Пожалуйста, пройдите по ссылке из письма."
-            }, status=status.HTTP_201_CREATED)
+            }
+
+            # создаю токен, ссылку, отправляю письмо:
+            token, created_at, lifetime = generate_email_verification_token(user)
+
+            # в режиме отладки вывожу токен с ответом:
+            if settings.DEBUG:
+                response_data["token"] = token
+
+            verification_link = create_verification_link(user, token=token, created_at=created_at, lifetime=lifetime)
+            send_verification_email(user, verification_link)  # вызывает send_mail
+            return Response(response_data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class ConfirmRegisterAPIView(APIView):
-    """Обработчик для подтверждения email через GET-запрос."""
+    """
+    Подтверждение регистрации.
+    Пользователь переходит по ссылке из письма,
+    Передавая серверу токен через параметры запроса.
+    Сервер проверяет токен и при успехе активирует пользователя.
+    """
 
     permission_classes = [permissions.AllowAny]
     queryset = User.objects.all()
 
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Подтверждение регистрации пользователя по токену",
+        description=(
+                "Используется для подтверждения регистрации пользователя. "
+                "Ожидает токен подтверждения в query-параметрах запроса. "
+                "Если токен действителен, активирует пользователя. "
+                "Если токен отсутствует, недействителен или пользователь не найден — возвращает ошибку."
+        ),
+        # request = None, не нужно для GET, но и POST без тела не требует описания запроса
+        parameters=[
+            OpenApiParameter(
+                name="token",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description=("Токен подтверждения email, полученный на почту. "
+                            "Если не указан - вернется ошибка."),
+                required=False,
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                description="Успешное подтверждение регистрации",
+                response=inline_serializer(
+                    "ConfirmRegisterMessageSerializer",
+                    fields={
+                        "message": serializers.CharField(),
+                    }
+                ),
+            ),
+            400: OpenApiResponse(
+                description="Ошибка подтверждения: токен отсутствует, недействителен или email уже подтвержден",
+                response=inline_serializer(
+                    "ConfirmRegisterErrorSerializer",
+                    fields={
+                        "detail": serializers.CharField(required=False),
+                        "action": serializers.CharField(required=False),
+                        "resend_url": serializers.CharField(required=False, help_text="Ссылка для подтвердения email"),
+                    }
+                ),
+            ),
+            404: OpenApiResponse(
+                description="Пользователь не найден",
+                response=inline_serializer(
+                    "ConfirmRegisterError404Serializer",
+                    fields={
+                        "detail": serializers.CharField(),
+                    }
+                ),
+            )
+        },
+        examples=[
+            OpenApiExample(
+                "Ошибка: отсутствует токен",
+                value={
+                    "detail": "The link has invalid token.",
+                    "action": "Request a new letter of confirmation by the link below.",
+                    "resend_url": "http://127.0.0.1:8000/api/auth/repeat_confirm_register"
+                },
+                status_codes=[400]
+            ),
+            OpenApiExample(
+                "Успешный запрос",
+                value={
+                    "message": "Email is successfully confirmed. You can enter the system."
+                },
+                status_codes=[200]
+            )
+        ]
+    )
     def get(self, request):
         # check if token in request:
         token = request.query_params.get('token')
         if not token:
             return Response({
-                "error": "The token was expired or not provided",
+                "detail": "The token was expired or not provided",
                 "action": "Request a new letter of confirmation by the link below.",
                 "resend_url": request.build_absolute_uri(reverse('repeat_confirm_register'))
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -81,7 +211,7 @@ class ConfirmRegisterAPIView(APIView):
 
         if not token_data:
             return Response({
-                "error": "The link has invalid token.",
+                "detail": "The link has invalid token.",
                 "action": "Request a new letter of confirmation by the link below.",
                 "resend_url": request.build_absolute_uri(reverse('repeat_confirm_register'))
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -101,23 +231,76 @@ class ConfirmRegisterAPIView(APIView):
                 return Response({'detail': 'Email has already been confirmed. You can enter the system.'}, status=status.HTTP_400_BAD_REQUEST)
 
         except User.DoesNotExist:
-            raise ObjectDoesNotExist("The user was not found. Please, repeat the registration.")
+            return Response({
+                "detail": "The user was not found. Please, repeat the registration."
+            }, status=status.HTTP_404_NOT_FOUND)
 
 
 class RepeatConfirmRegisterAPIView(APIView):
-    """обработчик запроса на повторное письмо подтверждения email"""
+    """
+    Запрос на повторное подтверждение email.
+    Пользователь переходит по ссылке, вводит имя и пароль.
+    Если введенные данные верны, на его почту отправляется
+    письмо со ссылкой для подтвержения регистрации.
+    """
 
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(
+        tags=['Authentication'],
+        summary="Запрос на повторное подтверждение email",
+        description="Пользователь, не подтвердивший email с первого раза, "
+                    "переходит по ссылке, вводит имя и пароль, "
+                    "запрашивая повторное подтверждение регистрации. ",
+        request=RepeatConfirmRegisterSerializer,
+        responses={
+            200: OpenApiResponse(
+                description="Успешный запрос на повторное подтверждение",
+                response=GenericResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "Пример удачного выполнения",
+                        value={
+                            "message": "На ваш email было отправлено письмо-подтверждение. "
+                                    "Пожалуйста, пройдите по ссылке из письма."
+                        },
+                        response_only=True,
+                    )
+                ]
+            ),
+            400: OpenApiResponse(
+                description="Ошибка запроса на повторное подтверждение",
+                response=GenericResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "Неверные данные",
+                        value={
+                            "detail": "Неверный логин или пароль"
+                        },
+                        response_only=True,
+                    ),
+                    OpenApiExample(
+                        "Подтверждение уже выполнено",
+                        value={
+                            "detail": "Email has already been confirmed. You can enter the system."
+                        },
+                        response_only=True,
+                    )
+                ]
+            )
+        }
+    )
     def post(self, request):
 
-        username = request.data['username']
-        password = request.data['password']
+        serializer = RepeatConfirmRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        username=serializer.validated_data['username']
+        password=serializer.validated_data['password']
 
         # проверка что юзер в бд и пароль совпадает:
         user = User.objects.filter(username=username).first()  # if not - user=None
         if not user or not check_password(password, user.password):  # сравниваю с хешем пароля
-            return Response({'error': "Неверный логин или пароль"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': "Неверный логин или пароль"}, status=status.HTTP_400_BAD_REQUEST)
 
         if user.is_active:
             return Response({
@@ -127,29 +310,73 @@ class RepeatConfirmRegisterAPIView(APIView):
         # отправление письма-подтверждения со ссылкой:
         send_verification_email(user)
         return Response({"message": "На ваш email было отправлено письмо-подтверждение. "
-                                    "Пожалуйста, пройдите по ссылке из письма."})
+                                    "Пожалуйста, пройдите по ссылке из письма."}, status=status.HTTP_200_OK)
 
 
 class LoginAPIView(APIView):
     """
-    обработчик логина, записывает создает токены и кладет в HttpOnly Cookies
+    POST-запрос для аутентификации пользователя с помощью имени пользователя и пароля.
+    При успешной аутентификации устанавливаются HttpOnly cookies с access и refresh токенами.
     """
-    # {"username": "mamba", "password": "1234"}
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Логин пользователя",
+        description=(
+                "Принимает имя пользователя и пароль, "
+                "аутентифицирует пользователя и устанавливает JWT access и refresh токены в HttpOnly cookies."
+                "В режиме разработки (DEBUG=True) токены также возвращаются в теле ответа для тестирования."
+        ),
+        request=LoginSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description='Успешная авторизация. В режиме DEBUG токены и в теле ответа.',
+            ),
+
+            400: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description='Неверные учетные данные или пользователь уже вошел в систему.',
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                'Успешный ответ',
+                value={"message": "Login successful"},
+                response_only=True,
+                status_codes=[200]
+            ),
+            OpenApiExample(
+                'Ошибка - неверные данные',
+                value={"detail": "Invalid credentials"},
+                response_only=True,
+                status_codes=[400],
+            ),
+            OpenApiExample(
+                'Ошибка - пользователь уже вошел',
+                value={
+                    "detail": "Вы уже вошли в систему. Выйдите перед повторным входом."
+                },
+                response_only=True,
+                status_codes=["400"],
+            ),
+        ],
+    )
     def post(self, request):
         user = request.user
 
         # проверяем, авторизован ли пользователь, передал ли он токен:
         if user.is_authenticated:
             return Response({
-                "message": "Вы уже вошли в систему.",
-                "detail": "Выйдите перед повторным входом."
+                "detail": "Вы уже вошли в систему. Выйдите перед повторным входом."
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # если пользователь не залогинен, продолжаем аутентификацию:
-        username = request.data.get("username")
-        password = request.data.get("password")
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        username = serializer.data['username']
+        password = serializer.data['password']
         # проверяем есть ли такой юзер с паролем в системе:
         user = authenticate(request, username=username, password=password)
         if user:
@@ -158,8 +385,17 @@ class LoginAPIView(APIView):
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
+            response_data = {"message": "Login successful"}
 
-            response = Response({"message": "Login successful"})
+            # в режиме отладки возвращаю токены в ответе:
+            if settings.DEBUG:
+                response_data.update({
+                    "access": access_token,
+                    "refresh": refresh_token,
+                })
+
+            response = Response(response_data)
+
             response.set_cookie(
                 key=settings.SIMPLE_JWT["AUTH_COOKIE"],
                 value=access_token,
@@ -182,32 +418,108 @@ class LoginAPIView(APIView):
             return response
 
         return Response(
-            {'error': 'Invalid credentials'},
+            {'detail': 'Invalid credentials'},
             status=status.HTTP_400_BAD_REQUEST)
 
 
 class LogoutAPIView(APIView):
-    """Обработчик выхода юзера и удаления его токенов из кук"""
+    """Выход юзера и удаление его токенов из кук"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Выход пользователя",
+        description="Удаляет JWT токены (access и refresh) из cookies и завершает сессию пользователя.",
+        request=None,  # нет запроса с телом
+        responses={
+            200: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description="Успешный выход и удаление токенов"
+            ),
+            401: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description="Не переданы данные для аутентификации"
+            )
+    },
+        examples=[
+            OpenApiExample(
+                "Успешный выход",
+                # description="Ответ при успешном удалении токенов из cookies.",
+                value={"message": "Выход выполнен"},
+                response_only=True,
+                status_codes=[200],
+            ),
+            OpenApiExample(
+                "Ошибка аутентификации",
+                # description="Ответ при успешном удалении токенов из cookies.",
+                value={
+                    "detail": "Authentication credentials were not provided."
+                },
+                response_only=True,
+                status_codes=[401],
+            )
+        ],
+    )
     def post(self, request):
-        response = Response({"message": "Выход выполнен"})
+        response = Response({"message": "Выход выполнен"}, status=status.HTTP_200_OK)
         response.delete_cookie(settings.SIMPLE_JWT["AUTH_COOKIE"])  # access-token
         response.delete_cookie("refresh_token")
-        response.data = {
-            "message": "Logout successful"
-        }
         return response
 
 
 class RefreshTokenAPIView(APIView):
     """
-    Вызывается клиентом для обновления рефреш-токена,
-    когда он получает ответ сервера 401 Unauthorized или
-    заранее вычислив время истечения токена.
-    настроить фронт чтобы автоматически обновлять токен за 1 минуту до истечения.
+    Обновление access-токена.
+    Клиент вызывает обработчик, переходя по ссылке
+    для обновления access-токена.
+    Когда access истёк, но refresh всё ещё действителен.
     """
 
-    permission_classes = [AllowAny]  # IsAuthenticated будет требовать действительный access_token, а он возможно истек и есть только refresh
+    permission_classes = [AllowAny]
 
+    @extend_schema(
+        tags=["Authentication"],
+        request=None,
+        summary="Обновление access-токена",
+        description=(
+                "Использует refresh-токен из cookies для генерации нового access-токена. "
+                "Если refresh отсутствует или недействителен — возвращается 401. "
+        ),
+        responses={
+            200: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description="Успешное обновление access-токена"
+            ),
+            401: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description="Ошибка refresh-токена"
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Успешный ответ",
+                value={"message": "Токен обновлен"},
+                response_only=True,
+                status_codes=[200],
+            ),
+            OpenApiExample(
+                "Ошибка: отсутствует токен обновления",
+                value={
+                    "detail": "Токен обновления отсутствует"
+                },
+                response_only=True,
+                status_codes=[401],
+            ),
+            OpenApiExample(
+                "Ошибка: недействительный токен обновления",
+                value={
+                    "detail": "Недействительный refresh-токен"
+                },
+                response_only=True,
+                status_codes=[401],
+            ),
+        ]
+    )
     def post(self, request):
         refresh_token = request.COOKIES.get("refresh_token")
         if not refresh_token:
@@ -219,7 +531,12 @@ class RefreshTokenAPIView(APIView):
         except Exception:
             raise AuthenticationFailed("Недействительный refresh-токен")
 
-        response = Response({"message": "Токен обновлен"})
+        response_data = {"message": "Токен обновлен"}
+
+        if settings.DEBUG:
+            response_data["access_token"] = access_token
+
+        response = Response(response_data)
         response.set_cookie(
             key=settings.SIMPLE_JWT["AUTH_COOKIE"],
             value=access_token,
@@ -242,9 +559,60 @@ class RefreshTokenAPIView(APIView):
 
 
 class ResetPasswordAPIView(APIView):
+    """
+    Сброс пароля.
+    Пользователь вводит свой email для сброса пароля.
+    По email определяется id пользователя.
+    Создается одноразовый токен и uid(закодированный id пользователя),
+    Токен и uid вшиваются в ссылку, которая посылается на email пользователя.
+    """
 
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Запрос на сброс пароля",
+        description="Этот эндпоинт генерирует уникальную ссылку для сброса пароля. "
+                    "Отправляется email с инструкциями.",
+        request=ResetPasswordSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description="Успешный запрос, даже если email не существует"
+            ),
+            400: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description="Ошибка в поле email"
+            )
+        },
+        examples=[
+            OpenApiExample(
+                "Успешный запрос",
+                value={"message": "Если email существует, мы отправили ссылку для сброса пароля."},
+                response_only=True,
+                status_codes=[200],
+            ),
+            OpenApiExample(
+                "Успешный запрос: несуществующий email",
+                # description="Email валидный по формату, но не существует в системе. Ответ всё равно успешный.",
+                value={"message": "Если email существует, мы отправили ссылку для сброса пароля."},
+                response_only=True,
+                status_codes=[200],
+            ),
+            OpenApiExample(
+                "Ошибка: невалидный email",
+                # description="Email валидный по формату, но не существует в системе. Ответ всё равно успешный.",
+                value={"email": ["Enter a valid email address."]},
+                response_only=True,
+                status_codes=[400],
+            ),
+        ]
+    )
     def post(self, request):
-        email = request.data.get("email")
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+
         user = User.objects.filter(email=email).first()
 
         if user:
@@ -255,7 +623,13 @@ class ResetPasswordAPIView(APIView):
             # change_link = f"{DOMAIN_NAME}{reverse('change_password', kwargs=)}{uid}/{token}"
             change_link = f'{DOMAIN_NAME}{reverse("change_password", kwargs={"uid": uid, "token": token})}'
 
-            # Отправка email:
+            response_data = {"message": "Если email существует, мы отправили ссылку для сброса пароля."}
+
+            if settings.DEBUG:
+                # в режиме отладки возвращаю ссылку в ответе
+                response_data["reset_link"] = change_link
+
+            # отправка email:
             send_mail(
                 "Восстановление пароля",
                 f"Перейдите по ссылке для сброса пароля: {change_link}",
@@ -264,13 +638,75 @@ class ResetPasswordAPIView(APIView):
                 fail_silently=False,
             )
 
-        # отправляем одинаковый ответ, чтобы не раскрывать существование email:
-        return Response({"detail": "Если email существует, мы отправили ссылку для сброса пароля."},
+        # отправляю одинаковый ответ, чтобы не раскрывать существование email:
+        return Response({"message": "Если email существует, мы отправили ссылку для сброса пароля."},
                         status=status.HTTP_200_OK)
 
 
 class ChangePasswordAPIView(APIView):
+    """
+    Смена пароля.
+    Пользователь переходит по ссылке из письма,
+    передавая серверу uid и токен в параметрах запроса.
+    Вводит пароль и подтверждение пароля.
+    Сервер разбирает uid, токен, проверяет новый пароль.
+    В случае успеха принимает изменения.
+    """
 
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Смена пароля по ссылке восстановления",
+        description="Изменяет пароль пользователя, если передан корректный UID и токен восстановления.",
+        parameters=[
+            OpenApiParameter(name='uid', description='UID пользователя в формате base64', type=str,
+                             location=OpenApiParameter.PATH),
+            OpenApiParameter(name='token', description='Токен восстановления пароля', type=str,
+                             location=OpenApiParameter.PATH),
+        ],
+        request=ChangePasswordSerializer,
+        responses={
+            400: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description="Недействительный токен или ссылка"
+            ),
+            401: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description="Данные для аутентификации не предоставлены"
+            ),
+            200: OpenApiResponse(
+                response=GenericResponseSerializer,
+                description="Пароль успешно изменен"
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Ошибка: недействительный токен",
+                value={"detail": "Недействительный токен."},
+                response_only=True,
+                status_codes=[400]
+            ),
+            OpenApiExample(
+                "Ошибка: недействительная ссылка",
+                value={"detail": "Недействительная ссылка."},
+                response_only=True,
+                status_codes=[400]
+            ),
+            OpenApiExample(
+                "Успешный запрос",
+                value={"message": "Пароль успешно изменен."},
+                response_only=True,
+                status_codes=[200]
+            ),
+            OpenApiExample(
+                "Ошибка аутентификации",
+                value={"detail": "Authentication credentials were not provided."},
+                response_only=True,
+                status_codes=[401]
+            ),
+        ]
+    )
     def post(self, request, uid, token):
         try:
             # находим юзера в бд по id:
@@ -285,7 +721,7 @@ class ChangePasswordAPIView(APIView):
             if serializer.is_valid():
                 user.set_password(serializer.validated_data["new_password"])
                 user.save()
-                return Response({"detail": "Пароль успешно изменен."}, status=status.HTTP_200_OK)
+                return Response({"message": "Пароль успешно изменен."}, status=status.HTTP_200_OK)
 
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

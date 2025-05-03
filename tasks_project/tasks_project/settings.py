@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'authapp',
     'tasks',
     'django_filters',
+    'drf_spectacular',
 
 
 ]
@@ -157,17 +158,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         # 'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'tasks_project.authentication.CookieJWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+        'authapp.authentication.CookieJWTAuthentication',
+        # 'rest_framework.authentication.SessionAuthentication',
+        # 'rest_framework.authentication.BasicAuthentication',
     ),
     # 'DEFAULT_PARSER_CLASSES': [
     #         'rest_framework.parsers.JSONParser',
     #     ]
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=120),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": True,  # рефреши после использования обновляются
     "BLACKLIST_AFTER_ROTATION": True,  # а после обновления добавляются в черный список
@@ -194,3 +196,11 @@ EMAIL_PORT = os.getenv('EMAIL_PORT')
 EMAIL_USE_TLS = True  # шифрование данных
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')  # адрес с которого юзерам будут приходить подтверждения регистрации и пр
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Your Project API',
+    'DESCRIPTION': 'Your project description',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # OTHER SETTINGS
+}

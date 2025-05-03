@@ -19,8 +19,11 @@ class GroupSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор для регистрации пользователя и отправления ссылки подтверждения на email.
+    """
     # полностью переопределить поле:
-    email = serializers.EmailField(required=True, validators=[UniqueValidator(queryset=User.objects.all())])
+    email = serializers.EmailField(required=True, validators=[UniqueValidator(queryset=User.objects.all())], help_text="Email")
 
     class Meta:
         model = User
@@ -57,14 +60,56 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-class ChangePasswordSerializer(serializers.Serializer):
+class RepeatConfirmRegisterSerializer(serializers.Serializer):
+    """
+    Сериализатор для повторного запроса ссылки на подтверждение регистрации.
+    """
+    username = serializers.CharField(help_text="Имя пользователя")
+    password = serializers.CharField(help_text="Пароль")
 
-    new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
-    confirm_password = serializers.CharField(required=True, write_only=True)
+
+class LoginSerializer(serializers.Serializer):
+    """
+    Сериализатор для логина пользователя.
+    """
+    username = serializers.CharField(help_text="Имя пользователя")
+    password = serializers.CharField(help_text="Пароль")
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """
+    Сериализатор для запроса на email ссылки на смену пароля.
+    """
+    email = serializers.EmailField(help_text="Email для сброса пароля")
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """
+    Сериализатор для смены пароля по ссылке восстановления.
+    """
+
+    new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password],
+                                         help_text="Новый пароль")
+    confirm_password = serializers.CharField(required=True, write_only=True, help_text="Подтверждение нового пароля")
 
     def validate(self, data):
         if data["new_password"] != data["confirm_password"]:
             raise serializers.ValidationError({"new_password": "Пароли не совпадают."})
         return data
+
+
+class GenericResponseSerializer(serializers.Serializer):
+    message = serializers.CharField(required=False, help_text="Успешное выполнение запроса")
+    detail = serializers.CharField(required=False, help_text="Ошибка выполнения запроса")
+    action = serializers.CharField(required=False, help_text="Действие пользователя")
+
+    username = serializers.ListField(child=serializers.EmailField(), required=False)
+    email = serializers.ListField(child=serializers.EmailField(), required=False)
+    password = serializers.ListField(child=serializers.EmailField(), required=False, write_only=True)
+    # non-field-errors = serializers.ListField(child=serializers.CharField(), required=False),
+
+    # token = serializers.CharField(required=False)
+    # uid = serializers.CharField(required=False)
+
 
 

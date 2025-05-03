@@ -3,14 +3,12 @@ from datetime import timedelta, datetime
 from http.client import responses
 from unittest.mock import patch
 from urllib import response
-
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from freezegun import freeze_time
-
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.response import Response
@@ -21,7 +19,6 @@ from django.urls import reverse
 from django.core.cache import cache, caches
 from django.core import mail
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
-
 from tasks_project import settings
 from authapp.utils import create_verification_link, generate_email_verification_token, time_email_verification
 from urllib.parse import urlparse
@@ -60,14 +57,14 @@ class RegisterAPIViewTest(APITestCase):
         # проверяю что токен сохраняется в кэше:
         # беру тело письма со ссылкой в которой вшит токен:
         email_body = mail.outbox[0].body
-        print(f'email_body: {email_body}')
+        # print(f'email_body: {email_body}')
         # нахожу начало, конец токена:
         token_start = email_body.find('token=') + len('token=')
         token_end = email_body.find('&expires_at=')
 
         # ищу этот токен в кэше потока джанги:
         cache_key = f"email_verification_token_{email_body[token_start:token_end]}"
-        print(f'cache_key: {cache_key}')
+        # print(f'cache_key: {cache_key}')
         cached_token = cache.get(cache_key)
         self.assertIsNotNone(cached_token, cached_token)
 
@@ -150,8 +147,10 @@ class ConfirmRegisterAPIViewTest(APITestCase):
         verification_link = create_verification_link(self.user)
         self.user.delete()
 
-        with self.assertRaisesMessage(ObjectDoesNotExist, 'The user was not found. Please, repeat the registration.'):
-            self.client.get(verification_link)
+        response = self.client.get(verification_link)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND, response.content.decode())
+        self.assertIn("The user was not found. Please, repeat the registration.", response.content.decode())
 
 
 class RepeatConfirmRegisterAPIViewTest(APITestCase):
@@ -224,17 +223,6 @@ class LoginAPIViewTest(APITestCase):
 
         self.login_url = reverse("login")  # http://127.0.0.1:8000/api/users/login
         self.logout_url = reverse("logout")
-
-    def tearDown(self):
-        response = self.client.post(self.logout_url)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content.decode())
-        # Проверяем, что в следующем запросе пользователь не аутентифицирован:
-        response = self.client.get('/users/')  # work only for permissions.IsAuthenticated
-        self.assertFalse(response.wsgi_request.user.is_authenticated)
-        # or:
-        request = self.client.get(self.login_url).wsgi_request
-        self.assertIsInstance(request.user, AnonymousUser)
 
     def test_login_successfull(self):
         user_data = {
@@ -404,7 +392,7 @@ class LogoutAPIViewTest(APITestCase):
         response = self.client.post(self.logout_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('Logout successful', response.content.decode())
+        self.assertIn('Выход выполнен', response.content.decode())
 
         # Проверяем, что токены удалены из cookies:
         # зная, что при логауте удаляется только значение ключей:
@@ -440,7 +428,7 @@ class RefreshTokenAPITestCase(JwtBaseTestCase):
         # self.make_authenticated(self.user)
         self.client.cookies["refresh_token"] = self.refresh_token
         response = self.client.post(self.url)
-        print(response.cookies)
+        # print(response.cookies)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access_token", response.cookies)
@@ -488,7 +476,7 @@ class ResetPasswordAPIViewTest(APITestCase):
         self.assertIn("Восстановление пароля", mail.outbox[0].subject)
         # разбираю ссылку:
         text = mail.outbox[0].body
-        print(f'path: {text}')
+        # print(f'path: {text}')
         # регулярка для извлечения uid и token:
         match = re.match(r"^.*/change_password/(?P<uid>[^/]+)/(?P<token>[^/]+)/?$", text)
         # проверяю, что uid и token присутствуют:
@@ -514,8 +502,8 @@ class ResetPasswordAPIViewTest(APITestCase):
         mock_send_mail.assert_called_once()
         # проверяю содержимое письма:
         called_args, called_kwargs = mock_send_mail.call_args  # достаю аргументы последнего вызова
-        print(f'called_args: {called_args}')  #  ('Восстановление пароля', 'Перейдите по ссылке...
-        print(f'called_kwargs: {called_kwargs}')  # fail_silently=False
+        # print(f'called_args: {called_args}')  #  ('Восстановление пароля', 'Перейдите по ссылке...
+        # print(f'called_kwargs: {called_kwargs}')  # fail_silently=False
         self.assertEqual(called_args[0], 'Восстановление пароля')
         self.assertRegex(called_args[1], r'Перейдите по ссылке для сброса пароля: '
                                          r'http://localhost:8000/api/auth/change_password/.+/.+')
@@ -564,7 +552,7 @@ class ChangePasswordAPIViewTest(APITestCase):
         response = self.client.post(self.change_url, user_data)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["detail"], "Пароль успешно изменен.")
+        self.assertEqual(response.data["message"], "Пароль успешно изменен.")
         # обновлю юзера в бд и проверю что установился новый пароль:
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("new_password123"))

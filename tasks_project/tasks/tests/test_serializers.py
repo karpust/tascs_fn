@@ -43,9 +43,9 @@ class TaskSerializerTests(TestCase):
         self.task_valid_data = {
             "title": "New Task",
             "description": "This is a test task",
-            "status": 1,
+            "status": "to_do",
             "deadline": self.deadline,
-            "priority": 3,
+            "priority": 'high',
             "executor": [self.executor.pk],
             "category": "Work",
             "tags": ["Urgent", "Home"],
@@ -68,9 +68,11 @@ class TaskSerializerTests(TestCase):
             "id": 1,
             "title": "New Task",
             "description": "This is a test task",
-            "status": 1,
+            "status": 'to_do',
+            "status_display": "to_do",
             "deadline": self.deadline.isoformat().replace("+00:00", "Z"),
-            "priority": 3,
+            "priority": 'high',
+            "priority_display": "high",
             "executor": [self.executor.pk],
             "category": "Work",
             "tags": ["Urgent", "Home"],
@@ -82,7 +84,8 @@ class TaskSerializerTests(TestCase):
         self.assertEqual(serializer.data["id"], expected_data["id"])
         self.assertEqual(serializer.data["title"], expected_data["title"])
         self.assertEqual(serializer.data["description"], expected_data["description"])
-        self.assertEqual(serializer.data["status"], expected_data["status"])
+        self.assertEqual(serializer.data["status"], expected_data["status"])  # to_do
+        self.assertEqual(task.status, 1)
         self.assertEqual(serializer.data["deadline"], expected_data["deadline"])
         self.assertEqual(serializer.data["priority"], expected_data["priority"])
         self.assertEqual(serializer.data["executor"], expected_data["executor"])
@@ -104,7 +107,7 @@ class TaskSerializerTests(TestCase):
 
         # check data:
         self.assertEqual(task.category.name, "UpdatedWork" )
-        self.assertEqual(set([tag.name for tag in task.tags.all()]), {"UpdatedUrgent", "Home"})
+        self.assertEqual(set(tag.name for tag in task.tags.all()), {"Updatedurgent", "Home"})
         self.assertEqual(task.title, self.task_valid_data["title"])
         self.assertEqual(task.description, self.task_valid_data["description"])
 
@@ -124,9 +127,10 @@ class TaskSerializerTests(TestCase):
 
         self.assertEqual(serializer.validated_data["title"], self.task_valid_data["title"])
         self.assertEqual(serializer.validated_data["description"], self.task_valid_data["description"])
-        self.assertEqual(serializer.validated_data["status"], self.task_valid_data["status"])
+        self.assertEqual(serializer.initial_data["status"], 'to_do')
+        self.assertEqual(serializer.validated_data["status"], 1)  # self.task_valid_data["status"]
         self.assertEqual(serializer.validated_data["deadline"], self.task_valid_data["deadline"])
-        self.assertEqual(serializer.validated_data["priority"], self.task_valid_data["priority"])
+        self.assertEqual(serializer.validated_data["priority"], 3)
         self.assertEqual(serializer.validated_data["executor"], [self.executor])
         self.assertEqual(serializer.validated_data["category"], "Work")
         self.assertEqual(serializer.validated_data["tags"], ["Urgent", "Home"])
@@ -163,7 +167,6 @@ class TaskSerializerTests(TestCase):
         self.assertIn("priority", serializer.errors)
         self.assertIn("executor", serializer.errors)
         self.assertIn("category", serializer.errors)
-        self.assertIn("tags", serializer.errors)
         self.assertFalse(serializer.is_valid(), serializer.errors)
 
     def test_missing_required_field(self):

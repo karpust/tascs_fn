@@ -18,3 +18,4 @@ class AuthappConfig(AppConfig):
         from django.contrib.auth.models import AnonymousUser
         User.add_to_class("role", property(get_user_role))
         AnonymousUser.role = property(get_user_role)
+        import authapp.schema

@@ -28,22 +28,24 @@ def generate_email_verification_token(user):
     return token, created_at, lifetime
 
 
-def create_verification_link(user):
+def create_verification_link(user, token=None, created_at=None, lifetime=None):
     """
     Создает ссылку для верификации emal;
     В ссылку вшиты: url сервера, UUID-токен,
     время когда токен истекает.
     """
-    token, created_at, lifetime = generate_email_verification_token(user)
+    if not all([token, created_at, lifetime]):
+        token, created_at, lifetime = generate_email_verification_token(user)
     expiration_time = created_at + lifetime
     verification_link = f'{DOMAIN_NAME}{reverse("confirm_register")}?token={token}&expires_at={expiration_time}'
     # request.build_absolute_uri(reverse('verify_email'))
     return verification_link
 
 
-def send_verification_email(user):
+def send_verification_email(user, verification_link=None):
     """Отправляет email с токеном и ссылкой для подтверждения."""
-    verification_link = create_verification_link(user)  # request
+    if not verification_link:
+        verification_link = create_verification_link(user)  # request
 
     send_mail(
         'Подтверждение email',

@@ -88,43 +88,71 @@ class TaskFilterTest(BaseTestCase):
         self.list_url = reverse('task-list')
 
     def get_ids(self, response):
-        # print(response.data)??
+        # print(response.data)
         return [t["id"] for t in response.json()]
 
-    def test_filter_by_status(self):
+    # def test_filter_by_status(self):
+    #     self.make_authenticated(self.user)
+    #     res = self.client.get(self.list_url, {"status": 1})
+    #     ids = self.get_ids(res)
+    #
+    #     self.assertEqual(set(ids), {self.task1.id})
+    #
+    # def test_filter_by_priority(self):
+    #     self.make_authenticated(self.user)
+    #     res = self.client.get(self.list_url, {"priority": 2})
+    #     ids = self.get_ids(res)
+    #
+    #     self.assertEqual(set(ids), {self.task2.id})
+
+    def test_filter_by_status_display(self):
         self.make_authenticated(self.user)
-        res = self.client.get(self.list_url, {"status": 1})
+        res = self.client.get(self.list_url, {"status_display": "to_do"})
         ids = self.get_ids(res)
 
         self.assertEqual(set(ids), {self.task1.id})
 
-    def test_filter_by_priority(self):
+    def test_filter_by_priority_display(self):
         self.make_authenticated(self.user)
-        res = self.client.get(self.list_url, {"priority": 2})
+        res = self.client.get(self.list_url, {"priority_display": "medium"})
         ids = self.get_ids(res)
 
         self.assertEqual(set(ids), {self.task2.id})
 
-    def test_filter_by_owner(self):
+    # def test_filter_by_owner(self):
+    #     self.make_authenticated(self.user)
+    #     res = self.client.get(self.list_url, {"owner": self.owner.id})
+    #     ids = self.get_ids(res)
+    #
+    #     self.assertEqual(set(ids), {self.task1.id, self.task2.id, self.task3.id})
+
+    def test_filter_by_owner_name(self):
         self.make_authenticated(self.user)
-        res = self.client.get(self.list_url, {"owner": self.owner.id})
+        res = self.client.get(self.list_url, {"owner": "owner"})
         ids = self.get_ids(res)
 
         self.assertEqual(set(ids), {self.task1.id, self.task2.id, self.task3.id})
 
-    def test_filter_by_owner_username(self):
+    def test_filter_by_executor_name(self):
         self.make_authenticated(self.user)
-        res = self.client.get(self.list_url, {"owner__username": "owner"})
-        ids = self.get_ids(res)
-
-        self.assertEqual(set(ids), {self.task1.id, self.task2.id, self.task3.id})
-
-    def test_filter_by_executor(self):
-        self.make_authenticated(self.user)
-        res = self.client.get(self.list_url, {"executor": self.executor.id})
+        res = self.client.get(self.list_url, {"executor": "executor"})
         ids = self.get_ids(res)
 
         self.assertEqual(set(ids), {self.task1.id, self.task3.id})
+
+    def test_filter_by_category_name(self):
+        self.make_authenticated(self.user)
+        res = self.client.get(self.list_url, {"category": "New Category1"})
+        ids = self.get_ids(res)
+
+        self.assertEqual(set(ids), {self.task1.id})
+
+    # def test_filter_by_executor(self):
+    #     self.make_authenticated(self.user)
+    #     res = self.client.get(self.list_url, {"executor": self.executor.id})
+    #     ids = self.get_ids(res)
+    #
+    #     self.assertEqual(set(ids), {self.task1.id, self.task3.id})
 
     def test_filter_by_deadline_range(self):
         self.make_authenticated(self.user)
@@ -137,9 +165,10 @@ class TaskFilterTest(BaseTestCase):
 
         self.assertEqual(set(ids), {self.task1.id, self.task2.id})
 
-    def test_filter_by_tags(self):
+    def test_filter_by_tag_name(self):
         self.make_authenticated(self.user)
-        data = {"tags": self.tag1.id}
+        data = {"tags": [self.tag1.name]}
+
         res = self.client.get(self.list_url, data)
         ids = self.get_ids(res)
 
@@ -318,16 +347,16 @@ class TaskCreateViewTests(BaseTaskTestCase):
         self.valid_data = {
             'title': 'New task',
             'description': 'New Description',
-            'status': 3,
-            'priority': 3,
+            'status': 'done',
+            'priority': 'high',
             'deadline': timezone.now() + timedelta(days=1),
             'executor': [self.executor.id],
         }
         self.invalid_data = {
             'title': 'Invalid task',
             'description': 'New Description',
-            'status': 3,
-            'priority': 3,
+            'status': 'done',
+            'priority': 'high',
             'deadline': timezone.now() + timedelta(days=1),
         }
 
@@ -395,15 +424,15 @@ class TaskPutViewTests(BaseTaskTestCase):
         self.valid_data = {
             'title': 'New task',
             'description': 'New Description',
-            'status': 3,
-            'priority': 3,
+            'status': 'done',
+            'priority': 'high',
             'deadline': timezone.now() + timedelta(days=1),
             'executor': [self.executor.id],
         }
         self.invalid_data = {
             'title': 'Invalid task',
             'description': 'New Description',
-            'status': 4,
+            'status': 'super_done',
             'priority': 3,
             'deadline': timezone.now() + timedelta(days=1),
             'executor': [self.executor.id],
@@ -495,7 +524,7 @@ class TaskPatchViewTests(BaseTaskTestCase):
 
     def test_patch_allowed_fields_as_executor(self):
         self.make_authenticated(self.executor)
-        data = {"status": 3}
+        data = {"status": "done"}
 
         response = self.client.patch(self.url, data, format='json', partial=True)
 
