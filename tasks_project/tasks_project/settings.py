@@ -196,6 +196,7 @@ EMAIL_PORT = os.getenv('EMAIL_PORT')
 EMAIL_USE_TLS = True  # шифрование данных
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')  # адрес с которого юзерам будут приходить подтверждения регистрации и пр
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Your Project API',
@@ -204,3 +205,5 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
     # OTHER SETTINGS
 }
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'

@@ -12,6 +12,8 @@ from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParamete
 from rest_framework import permissions, viewsets, status, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from authapp.tasks import send_email_task
 from tasks_project.settings import DOMAIN_NAME
 from authapp.serializers import GroupSerializer, UserSerializer, RegisterSerializer, ChangePasswordSerializer, \
     LoginSerializer, ResetPasswordSerializer, RepeatConfirmRegisterSerializer, GenericResponseSerializer
@@ -109,7 +111,14 @@ class RegisterAPIView(APIView):
                 response_data["token"] = token
 
             verification_link = create_verification_link(user, token=token, created_at=created_at, lifetime=lifetime)
-            send_verification_email(user, verification_link)  # вызывает send_mail
+
+            send_email_task.delay(
+                subject='Подтверждение email',
+                message=f'Пожалуйста, подтвердите свой email, перейдя по ссылке: {verification_link}',
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+            )
+            # send_verification_email(user, verification_link)  # вызывает send_mail
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -307,10 +316,30 @@ class RepeatConfirmRegisterAPIView(APIView):
                 'detail': 'Email has already been confirmed. You can enter the system.'},
                 status=status.HTTP_400_BAD_REQUEST)  # редиректнуть на логин
 
+        response_data = {
+            "message": "На ваш email было отправлено письмо-подтверждение. "
+                        "Пожалуйста, пройдите по ссылке из письма."
+        }
+
+        # создаю токен, ссылку, отправляю письмо:
+        token, created_at, lifetime = generate_email_verification_token(user)
+
+        # в режиме отладки вывожу токен с ответом:
+        if settings.DEBUG:
+            response_data["token"] = token
+
+        verification_link = create_verification_link(user, token=token, created_at=created_at, lifetime=lifetime)
+
         # отправление письма-подтверждения со ссылкой:
-        send_verification_email(user)
-        return Response({"message": "На ваш email было отправлено письмо-подтверждение. "
-                                    "Пожалуйста, пройдите по ссылке из письма."}, status=status.HTTP_200_OK)
+        send_email_task.delay(
+            subject='Повторное подтверждение email',
+            message=f'Пожалуйста, подтвердите свой email, перейдя по ссылке: {verification_link}',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+
+        )
+        # send_verification_email(user)
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class LoginAPIView(APIView):
@@ -615,6 +644,8 @@ class ResetPasswordAPIView(APIView):
 
         user = User.objects.filter(email=email).first()
 
+        response_data = {"message": "Если email существует, мы отправили ссылку для сброса пароля."}
+
         if user:
             # создаю токен встроенными методами джанги:
             token = default_token_generator.make_token(user)  # создает одноразовый токен используя данные юзера
@@ -623,24 +654,22 @@ class ResetPasswordAPIView(APIView):
             # change_link = f"{DOMAIN_NAME}{reverse('change_password', kwargs=)}{uid}/{token}"
             change_link = f'{DOMAIN_NAME}{reverse("change_password", kwargs={"uid": uid, "token": token})}'
 
-            response_data = {"message": "Если email существует, мы отправили ссылку для сброса пароля."}
 
             if settings.DEBUG:
-                # в режиме отладки возвращаю ссылку в ответе
-                response_data["reset_link"] = change_link
+                # в режиме отладки возвращаю токен и uid в ответе
+                response_data.update({"uid": uid, "token": token})
+                # response_data["token"] = token
 
             # отправка email:
-            send_mail(
-                "Восстановление пароля",
-                f"Перейдите по ссылке для сброса пароля: {change_link}",
-                "no-reply@yourdomain.com",
-                [email],
-                fail_silently=False,
+            send_email_task.delay(
+                subject="Восстановление пароля",
+                message=f"Перейдите по ссылке для сброса пароля: {change_link}",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email]
             )
 
         # отправляю одинаковый ответ, чтобы не раскрывать существование email:
-        return Response({"message": "Если email существует, мы отправили ссылку для сброса пароля."},
-                        status=status.HTTP_200_OK)
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class ChangePasswordAPIView(APIView):
