@@ -112,9 +112,11 @@ class RegisterAPIView(APIView):
 
             verification_link = create_verification_link(user, token=token, created_at=created_at, lifetime=lifetime)
 
+            context = {'username': user.username, 'verification_link': verification_link}
             send_email_task.delay(
                 subject='Подтверждение email',
-                message=f'Пожалуйста, подтвердите свой email, перейдя по ссылке: {verification_link}',
+                template_name='register_confirmation',
+                context=context,
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
             )
@@ -329,16 +331,17 @@ class RepeatConfirmRegisterAPIView(APIView):
             response_data["token"] = token
 
         verification_link = create_verification_link(user, token=token, created_at=created_at, lifetime=lifetime)
+        context = {"username": user.username, "verification_link": verification_link}
 
         # отправление письма-подтверждения со ссылкой:
         send_email_task.delay(
             subject='Повторное подтверждение email',
-            message=f'Пожалуйста, подтвердите свой email, перейдя по ссылке: {verification_link}',
+            context=context,
+            template_name='register_confirmation',
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[user.email],
 
         )
-        # send_verification_email(user)
         return Response(response_data, status=status.HTTP_200_OK)
 
 
@@ -660,10 +663,12 @@ class ResetPasswordAPIView(APIView):
                 response_data.update({"uid": uid, "token": token})
                 # response_data["token"] = token
 
+            context = {'username': user.username, 'change_link': change_link}
             # отправка email:
             send_email_task.delay(
                 subject="Восстановление пароля",
-                message=f"Перейдите по ссылке для сброса пароля: {change_link}",
+                context=context,
+                template_name="reset_password_confirmation",
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[email]
             )
