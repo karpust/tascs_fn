@@ -2,23 +2,18 @@ from rest_framework import permissions
 from tasks.models import Task
 
 
-class RolePermission(permissions.BasePermission):
-    """Базовый класс разрешений на основе роли пользователя."""
-    allowed_roles = []
+def get_group_name(user):
+    group = user.groups.first()
+    return group.name if group else 'user'
 
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in self.allowed_roles
-        # return request.user.role in self.allowed_roles  # here i use get_user_role from authapp/apps.py
+def is_admin(user):
+    return get_group_name(user) == "admin"
 
+def is_manager(user):
+    return get_group_name(user) == "manager"
 
-class IsAdminUser(RolePermission):
-    """Разрешение для админов (полный доступ)"""
-    allowed_roles = ['Admin']
-
-
-class IsManagerUser(RolePermission):
-    """Разрешение для менеджеров (создание и назначение задач)"""
-    allowed_roles = ['Manager']
+def is_user(user):
+    return get_group_name(user) == "user"
 
 
 class TaskPermission(permissions.BasePermission):
@@ -28,7 +23,7 @@ class TaskPermission(permissions.BasePermission):
         # доступ к api /tasks/:
         if request.user.is_authenticated:
             if request.method == "POST":
-                return request.user.role in ["manager", "admin"]
+                return is_admin(request.user) or is_manager(request.user)
             return True
         return False
 
@@ -37,28 +32,31 @@ class TaskPermission(permissions.BasePermission):
         if not request.user.is_authenticated:
             return False
 
-        if request.user.role == 'admin':
+        if is_admin(request.user):
             return True
 
-        if request.user.role == 'manager':
+        if is_manager(request.user):
             if request.user == obj.owner:
                 return request.method in ["GET", 'PATCH', 'PUT']
             return request.method == "GET"
 
-        if request.user.role == 'user':
+        if is_user(request.user):
             # может изменять только поле 'status':
             if obj.executor.contains(request.user):  # m2m
                 # same as request.user == obj.executor.filter(id=request.user.id).first()
                 # юзер может изменять только те задачи, где назначен исполнителем:
-                return request.method == 'PATCH' and set(request.data.keys()).issubset({'status', 'comments'}) or request.method == 'GET'
+                if request.method == "PATCH":
+                    return set(request.data.keys()).issubset({'status'}) # статус или пустой
+                if request.method == "GET":
+                    return True
+
             return request.method == "GET"
-
-
 """
 получает поля из request.data(из тела запроса на изменение)
 преобразует их во множество
 проверяет является ли это множество подмножеством {'status', 'comments'- убери}
 """
+
 
 class CommentPermission(permissions.BasePermission):
     """проверяет действия ролей, не аутентификацию"""
@@ -88,7 +86,7 @@ class CommentPermission(permissions.BasePermission):
         if not request.user.is_authenticated:
             return False
 
-        if request.user.role == "admin":
+        if is_admin(request.user):
             return request.method in ["GET", 'DELETE']
 
         if request.method in ("PUT", "PATCH", "DELETE"):

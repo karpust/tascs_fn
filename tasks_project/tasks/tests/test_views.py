@@ -1,5 +1,6 @@
 from datetime import timedelta
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.timezone import now
@@ -29,8 +30,8 @@ class BaseTestCase(APITestCase):
     @classmethod
     def make_user(cls, username, role):
         user = User.objects.create_user(username=username, password="password123")
-        user.profile.role = role
-        user.profile.save()
+        group, _ = Group.objects.get_or_create(name=role)
+        user.groups.set([group])
         return user
 
     def make_authenticated(self, user):  # TODO этот же метод в authapp но с рефрешем: нужно убрать дублирование
@@ -89,7 +90,9 @@ class TaskFilterTest(BaseTestCase):
 
     def get_ids(self, response):
         # print(response.data)
-        return [t["id"] for t in response.json()]
+        # print(response.json())
+        return [t["id"] for t in response.json()["results"]]
+
 
     # def test_filter_by_status(self):
     #     self.make_authenticated(self.user)

@@ -12,14 +12,24 @@ cov:
 cov-html:
 	coverage html & disown && start htmlcov/index.html
 
-# Проверка стиля кода (можно заменить на black/isort и т.п.)
+# Проверка стиля кода
 lint:
 	flake8 authapp tasks
+
+# Форматирование кода
+format:
+	black authapp tasks  # отступы, кавычки, переносы строк
+	isort authapp tasks  # упорядочивает импорты
 
 # Очистка отчёта покрытия
 clean:
 	rd /s /q htmlcov 2>nul || exit 0
 	del .coverage 2>nul || exit 0
+
+# Полная проверка (тесты, покрытие, линтинг)
+check: lint cov
+	coverage report --fail-under=80
+
 
 # .PHONY: test cov cov-html lint clean  # crossystems
 #

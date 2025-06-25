@@ -6,6 +6,7 @@ from urllib import response
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth.tokens import default_token_generator
+from django.test import override_settings
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from freezegun import freeze_time
@@ -25,7 +26,10 @@ from urllib.parse import urlparse
 
 User = get_user_model()
 
-
+@override_settings(
+    CELERY_TASK_ALWAYS_EAGER=True,  # выполнять задачи сразу, без очереди - т е синхронно
+    CELERY_TASK_EAGER_PROPAGATES=True  # вернуть ошибки(исключения) в вызывающем коде
+)  # изменяю настройки селери для теста: отправлять задачу синхронно чтобы работать с email.outbox
 class RegisterAPIViewTest(APITestCase):
 
     def setUp(self):
@@ -60,7 +64,7 @@ class RegisterAPIViewTest(APITestCase):
         # print(f'email_body: {email_body}')
         # нахожу начало, конец токена:
         token_start = email_body.find('token=') + len('token=')
-        token_end = email_body.find('&expires_at=')
+        token_end = email_body.find('&amp;expires_at=')
 
         # ищу этот токен в кэше потока джанги:
         cache_key = f"email_verification_token_{email_body[token_start:token_end]}"
@@ -449,6 +453,11 @@ class RefreshTokenAPITestCase(JwtBaseTestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data['detail'], 'Недействительный refresh-токен')
 
+
+@override_settings(
+    CELERY_TASK_ALWAYS_EAGER=True,  # выполнять задачи сразу, без очереди - т е синхронно
+    CELERY_TASK_EAGER_PROPAGATES=True  # вернуть ошибки(исключения) в вызывающем коде
+)
 class ResetPasswordAPIViewTest(APITestCase):
 
     def setUp(self):
@@ -471,24 +480,24 @@ class ResetPasswordAPIViewTest(APITestCase):
 
         response = self.client.post(self.url, user_data)
 
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         # извлекаю uid и token из ссылки письма:
         self.assertEqual(len(mail.outbox), 1)  # проверяю, что отправлено письмо
-        self.assertIn("Восстановление пароля", mail.outbox[0].subject)
+        self.assertIn("Сброс пароля", mail.outbox[0].subject)
         # разбираю ссылку:
         text = mail.outbox[0].body
-        # print(f'path: {text}')
         # регулярка для извлечения uid и token:
-        match = re.match(r"^.*/change_password/(?P<uid>[^/]+)/(?P<token>[^/]+)/?$", text)
+        match = re.search(r"/change_password/(?P<uid>[^/]+)/(?P<token>[^/]+)/?$", text)
         # проверяю, что uid и token присутствуют:
         self.assertIsNotNone(match, "URL не содержит uid и token")
-        self.uid = match.group("uid")
-        self.token = match.group("token")
-        self.assertTrue(self.uid, "UID отсутствует")
-        self.assertTrue(self.token, "Token отсутствует")
+        uid = match.group("uid")
+        token = match.group("token")
+        self.assertTrue(uid, "UID отсутствует")
+        self.assertTrue(token, "Token отсутствует")
 
 
-    @patch('authapp.views.send_mail')
-    def test_reset_password_successfull(self, mock_send_mail):
+    # @patch('authapp.views.send_email_task')
+    def test_reset_password_successfull(self):  # , mock_send_email_task
 
         user_data = {
             "email": "some_user@example.com"
@@ -499,16 +508,33 @@ class ResetPasswordAPIViewTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("Если email существует, мы отправили ссылку для сброса пароля", response.content.decode())
         # проверяю, что письмо отправляется:
-        mock_send_mail.assert_called_once()
+        # mock_send_email_task.assert_called_once()
+        self.assertEqual(len(mail.outbox), 1)
         # проверяю содержимое письма:
-        called_args, called_kwargs = mock_send_mail.call_args  # достаю аргументы последнего вызова
-        # print(f'called_args: {called_args}')  #  ('Восстановление пароля', 'Перейдите по ссылке...
-        # print(f'called_kwargs: {called_kwargs}')  # fail_silently=False
-        self.assertEqual(called_args[0], 'Восстановление пароля')
-        self.assertRegex(called_args[1], r'Перейдите по ссылке для сброса пароля: '
-                                         r'http://localhost:8000/api/auth/change_password/.+/.+')
-        self.assertEqual(called_args[2], 'no-reply@yourdomain.com')
-        self.assertEqual(called_args[3], ['some_user@example.com'])
+        self.assertEqual(mail.outbox[0].subject, 'Сброс пароля')
+        self.assertEqual(mail.outbox[0].from_email, 'noreply@yourdomain.com')
+        self.assertEqual(mail.outbox[0].to, ["some_user@example.com"])
+        text = mail.outbox[0].body
+        self.assertRegex(text, r'Перейдите по ссылке для сброса пароля: '
+                               r'http://localhost:8000/api/auth/change_password/.+/.+')
+        # проверяю токены:
+        pattern = r"/change_password/(?P<uid>[^/]+)/(?P<token>[^/]+)/?"
+        match = re.search(pattern, text)
+        self.assertNotEqual(match, None)
+        uid = match.group("uid")
+        token = match.group("token")
+        self.assertTrue(uid, "UID отсутствует")
+        self.assertTrue(token, "Token отсутствует")
+
+
+        # called_args, called_kwargs = mock_send_email_task.call_args  # достаю аргументы последнего вызова
+        # # print(f'called_args: {called_args}')  #  ('Восстановление пароля', 'Перейдите по ссылке...
+        # # print(f'called_kwargs: {called_kwargs}')  # fail_silently=False
+        # self.assertEqual(called_args[0], 'Сброс пароля')
+        # self.assertRegex(called_args[1], r'Перейдите по ссылке для сброса пароля: '
+        #                                  r'http://localhost:8000/api/auth/change_password/.+/.+')
+        # self.assertEqual(called_args[2], 'no-reply@yourdomain.com')
+        # self.assertEqual(called_args[3], ['some_user@example.com'])
 
 
     @patch('authapp.views.send_mail')

@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'tasks',
     'django_filters',
     'drf_spectacular',
+    'django_celery_beat',
 
 
 ]
@@ -162,9 +163,25 @@ REST_FRAMEWORK = {
         # 'rest_framework.authentication.SessionAuthentication',
         # 'rest_framework.authentication.BasicAuthentication',
     ),
-    # 'DEFAULT_PARSER_CLASSES': [
-    #         'rest_framework.parsers.JSONParser',
-    #     ]
+    'DEFAULT_RENDERER_CLASSES': (
+            'rest_framework.renderers.JSONRenderer',
+            'rest_framework.renderers.BrowsableAPIRenderer',
+    ),
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+        ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 20,
+    'DEFAULT_THROTTLE_CLASSES': [
+            'rest_framework.throttling.UserRateThrottle',
+            'rest_framework.throttling.AnonRateThrottle',
+        ],
+    # 'DEFAULT_THROTTLE_RATES': {
+    #         'user': '5/hour',
+    #         'anon': '10/minute',
+    #     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
@@ -207,3 +224,61 @@ SPECTACULAR_SETTINGS = {
 }
 
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'  # для хранения результатов
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_ENABLE_UTC = True
+CELERY_TIMEZONE = 'UTC'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[%(asctime)s] [%(levelname)s] %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'email_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'formatter': 'verbose',
+            'filename': 'logs/email_tasks.log',
+        },
+        'notify_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'formatter': 'verbose',
+            'filename': 'logs/notification_tasks.log',
+        },
+
+        'comment_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'formatter': 'verbose',
+            'filename': 'logs/comment_factory.log',
+        },
+    },
+    'loggers': {
+        'email_tasks': {
+            'handlers': ['email_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+
+        'notification_tasks': {
+            'handlers': ['notify_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+
+        'comment_factory': {
+            'handlers': ['comment_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# handlers — описывают куда и как логировать (файл, консоль, e-mail и т. д.).
+# loggers — описывают что именно логировать (от какого логгера, на каком уровне, с какими обработчиками).

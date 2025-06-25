@@ -110,17 +110,14 @@ class RegisterAPIView(APIView):
             if settings.DEBUG:
                 response_data["token"] = token
 
-            verification_link = create_verification_link(user, token=token, created_at=created_at, lifetime=lifetime)
+            confirmation_link = create_verification_link(user, token=token, created_at=created_at, lifetime=lifetime)
+            context = {'username': user.username, 'confirmation_link': confirmation_link}
 
-            context = {'username': user.username, 'verification_link': verification_link}
-            send_email_task.delay(
-                subject='Подтверждение email',
-                template_name='register_confirmation',
-                context=context,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
+            send_email_task.apply_async(
+                args=['register_confirmation', context, user.email],
+                queue = 'high_priority'
             )
-            # send_verification_email(user, verification_link)  # вызывает send_mail
+
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -330,17 +327,13 @@ class RepeatConfirmRegisterAPIView(APIView):
         if settings.DEBUG:
             response_data["token"] = token
 
-        verification_link = create_verification_link(user, token=token, created_at=created_at, lifetime=lifetime)
-        context = {"username": user.username, "verification_link": verification_link}
+        confirmation_link = create_verification_link(user, token=token, created_at=created_at, lifetime=lifetime)
+        context = {"username": user.username, "confirmation_link": confirmation_link}
 
         # отправление письма-подтверждения со ссылкой:
-        send_email_task.delay(
-            subject='Повторное подтверждение email',
-            context=context,
-            template_name='register_confirmation',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-
+        send_email_task.apply_async(
+            args=['repeat_register_confirmation', context, user.email],
+            queue='default',
         )
         return Response(response_data, status=status.HTTP_200_OK)
 
@@ -655,7 +648,7 @@ class ResetPasswordAPIView(APIView):
             uid = urlsafe_base64_encode(force_bytes(user.pk))  # кодирует id юзера в Base64 (URL-безопасный формат)
             # чтобы передавать uid в URL без спецсимволов
             # change_link = f"{DOMAIN_NAME}{reverse('change_password', kwargs=)}{uid}/{token}"
-            change_link = f'{DOMAIN_NAME}{reverse("change_password", kwargs={"uid": uid, "token": token})}'
+            confirmation_link = f'{DOMAIN_NAME}{reverse("change_password", kwargs={"uid": uid, "token": token})}'
 
 
             if settings.DEBUG:
@@ -663,14 +656,11 @@ class ResetPasswordAPIView(APIView):
                 response_data.update({"uid": uid, "token": token})
                 # response_data["token"] = token
 
-            context = {'username': user.username, 'change_link': change_link}
+            context = {'username': user.username, 'confirmation_link': confirmation_link}
             # отправка email:
-            send_email_task.delay(
-                subject="Восстановление пароля",
-                context=context,
-                template_name="reset_password_confirmation",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email]
+            send_email_task.apply_async(
+                args=["reset_password_confirmation", context, email],
+                queue="low_priority",
             )
 
         # отправляю одинаковый ответ, чтобы не раскрывать существование email:

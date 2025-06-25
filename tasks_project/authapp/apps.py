@@ -1,10 +1,10 @@
 from django.apps import AppConfig
 
 
-def get_user_role(self):
-    profile = getattr(self, 'profile', None)  # check if user have profile
-    if profile and hasattr(profile, 'role'):  # check if profile have role
-        return profile.role
+# def get_user_role(self):
+#     profile = getattr(self, 'profile', None)  # check if user have profile
+#     if profile and hasattr(profile, 'role'):  # check if profile have role
+#         return profile.role
 
 
 
@@ -14,8 +14,8 @@ class AuthappConfig(AppConfig):
 
     def ready(self):
         import authapp.signals  # регистрирую сигнал
-        from django.contrib.auth.models import User
-        from django.contrib.auth.models import AnonymousUser
-        User.add_to_class("role", property(get_user_role))
-        AnonymousUser.role = property(get_user_role)
+        # from django.contrib.auth.models import User
+        # from django.contrib.auth.models import AnonymousUser
+        # User.add_to_class("role", property(get_user_role))
+        # AnonymousUser.role = property(get_user_role)
         import authapp.schema

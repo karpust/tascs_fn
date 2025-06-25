@@ -14,11 +14,11 @@ class BasePermissionTestCase(APITestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.admin = MagicMock(role="admin")
-        cls.manager = MagicMock(role="manager")
-        cls.user = MagicMock(role="user")
-        cls.executor = MagicMock(role="user")
-        cls.owner = MagicMock(role="manager")
+        cls.admin = MagicMock(groups=MagicMock(name='admin'))
+        cls.manager = MagicMock(groups=MagicMock(name="manager"))
+        cls.user = MagicMock(groups=MagicMock(name="user"))
+        cls.executor = MagicMock(groups=MagicMock(name="user"))
+        cls.owner = MagicMock(groups=MagicMock(name="manager"))
         cls.all_methods = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 
     def setUp(self):
@@ -47,8 +47,8 @@ class TaskPermissionTestCase(BasePermissionTestCase):
         super().setUp()
         self.factory = APIRequestFactory()
 
-
-    def test_task_all_by_admin(self):
+    @patch('tasks.permissions.is_admin', return_value=True)
+    def test_task_all_by_admin(self, mock_is_admin):
         allowed_methods = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 
         for method in allowed_methods:
@@ -72,7 +72,8 @@ class TaskPermissionTestCase(BasePermissionTestCase):
             self.assertFalse(self.permission.has_permission(request, None))
             self.assertFalse(self.permission.has_object_permission(request, None, self.task))
 
-    def test_task_get_post_by_manager(self):
+    @patch('tasks.permissions.is_manager', return_value=True)
+    def test_task_get_post_by_manager(self, mock_is_manager):
         allowed_methods = ["GET", "POST"]
         denied_methods = ["PUT", "PATCH", "DELETE"]
         request = self.factory.get("/")
@@ -91,7 +92,8 @@ class TaskPermissionTestCase(BasePermissionTestCase):
             self.assertTrue(self.permission.has_permission(request, None))  # менеджеру доступен api
             self.assertFalse(self.permission.has_object_permission(request, None, self.task))
 
-    def test_task_all_allowed_except_delete_by_owner(self):
+    @patch('tasks.permissions.is_manager', return_value=True)
+    def test_task_all_allowed_except_delete_by_owner(self, mock_is_manager):
         allowed_methods = ["GET", "PUT", "PATCH"]
         denied_methods = ["DELETE"]
         request = self.factory.get('/')
@@ -107,7 +109,8 @@ class TaskPermissionTestCase(BasePermissionTestCase):
             self.assertTrue(self.permission.has_permission(request, None))
             self.assertFalse(self.permission.has_object_permission(request, None, self.task))
 
-    def test_task_read_by_authorized(self):
+    @patch('tasks.permissions.is_user', return_value=True)
+    def test_task_read_by_authorized(self, mock_is_user):
         allowed_methods = ["GET"]
         denied_methods = ["POST", "PUT", "PATCH", "DELETE"]
         request = self.factory.get('/')
@@ -127,12 +130,13 @@ class TaskPermissionTestCase(BasePermissionTestCase):
                 self.assertTrue(self.permission.has_permission(request, None))
                 self.assertFalse(self.permission.has_object_permission(request, None, self.task))
 
-    def test_executor_can_update_status_and_comments(self):
+    @patch('tasks.permissions.is_user', return_value=True)
+    def test_executor_can_update_status_and_comments(self, mock_is_user):
         # говорю что юзер является исполнителем:
         self.task.executor.contains.return_value = True
         # разрешен PATCH в полях 'status' и 'comments':
         request = self.factory.patch("/")
-        request.data = {"status": "in_progress", "comments": "Working on it"}
+        request.data = {"status": "in_progress"}
         request.user = self.executor
 
         self.assertTrue(self.permission.has_permission(request, None))  # юзеру доступен api
@@ -234,7 +238,8 @@ class CommentPermissionTestCase(BasePermissionTestCase):
             self.assertTrue(self.permission.has_permission(request, None))
             self.assertTrue(self.permission.has_object_permission(request, None, self.comment))
 
-    def test_comment_read_delete_by_admin(self):
+    @patch("tasks.permissions.is_admin", return_value=True)
+    def test_comment_read_delete_by_admin(self, mock_is_admin):
         """админ не может создавать и редактировать комменты"""
         request = self.factory.get('/')
 

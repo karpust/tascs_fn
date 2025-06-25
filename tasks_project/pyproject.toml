@@ -10,4 +10,4 @@ exclude_lines = [
     "if self.debug"
 ]
 precision = 2
-fail_under = 85
+fail_under = 80

@@ -53,6 +53,7 @@ class Task(models.Model):
     executor = models.ManyToManyField(User, related_name='task_executors', verbose_name="Исполнитель задачи")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
     tags = models.ManyToManyField(Tag, blank=True)
+    notified = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Задача"

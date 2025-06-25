@@ -40,15 +40,11 @@ class LabelChoiceField(serializers.ChoiceField):
     def to_representation(self, value):
         # value => label
         # 1 => "to_do
-        if value == '' and self.allow_blank:
-            return value
         return self.choices[value]
 
     def to_internal_value(self, data):
         # label => value
         # "to_do" => 1
-        if data == '' and self.allow_blank:
-            return data
         for key, label in self.choices.items():
             if label == data:
                 return key

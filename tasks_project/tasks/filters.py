@@ -75,7 +75,7 @@ class TaskFilter(django_filters.FilterSet):
         lookup = {label: val for val, label in choices}  # ==> {'to_do': 1,'in_progress': 2,'done': 3}
         # извлекаю значение для фильтрации:
         val = lookup.get(value)  # 'in_progress' ==> 2
-        if val is not None:
+        if val is not None: # такого пока нет, но вдруг допишу чего
             return queryset.filter(**{field_name: val})  # filter by status=2
         return queryset.none()  # если значение не распознано, вернуть пустой queryset
 

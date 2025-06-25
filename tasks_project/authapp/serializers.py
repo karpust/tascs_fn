@@ -5,17 +5,40 @@ from rest_framework import serializers
 from django.core.exceptions import ValidationError
 from rest_framework.validators import UniqueValidator
 
-
-class UserSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = User
-        fields = ['url', 'username', 'email', 'groups']
-
+allowed_groups = ['user', 'admin', 'manager']
 
 class GroupSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Group
         fields = ['url', 'name']
+
+
+class UserSerializer(serializers.HyperlinkedModelSerializer):
+    # groups = serializers.SlugRelatedField(
+    #     slug_field='name',
+    #     queryset=Group.objects.filter(name__in=allowed_groups),  # защита от ляпа админа
+    #     required=False,
+    # )
+
+    class Meta:
+        model = User
+        fields = ['url', 'username', 'email', 'groups']
+
+    # def create(self, validated_data):
+    #     user = super().create(validated_data)
+    #     default_group, _ = Group.objects.get_or_create(name='user')
+    #     user.groups.set([default_group])
+    #     return user
+    #
+    # def update(self, instance, validated_data):
+    #     """
+    #     admin can change user's group
+    #     """
+    #     group = validated_data.pop('groups', None)
+    #     if group:
+    #         instance.groups.set([group])  # bcz groups is m2m in PermissionsMixin
+    #     instance.save(update_fields=['groups'])
+    #     return instance
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -57,6 +80,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],  # автоматом хешируется при create_user
             is_active=False  # user is not active before confirm email
         )
+        default_group, _ = Group.objects.get_or_create(name='user')
+        user.groups.set([default_group])
         return user
 
 
