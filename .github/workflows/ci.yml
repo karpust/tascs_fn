@@ -27,7 +27,7 @@ jobs:
     - name: Run pre-commit hooks
       working-directory: tasks_project
       run: pre-commit run --all-files
-          
+
     - name: Lint with ruff
       working-directory: tasks_project
       run: make lint
