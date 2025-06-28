@@ -20,6 +20,11 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      mailhog:
+        image: mailhog/mailhog
+        ports:
+          - 1025:1025  # порт для тестового SMTP
+
     steps:
     - uses: actions/checkout@v4
 
