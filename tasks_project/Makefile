@@ -1,58 +1,48 @@
-.PHONY: test cov cov-html lint clean
+.PHONY: test cov cov-html lint format check-comments fix-comments clean check
+# не файлы, а команды к выполнению
 
-# Запуск стандартных Django тестов
-test:
+# Что проверять
+SRC = authapp tasks tasks_project
+
+test:  ## Запуск django тестов
 	python manage.py test
 
-# Запуск тестов с замером покрытия
-cov:
+cov:  ## Запуск тестов с замером покрытия
 	coverage run manage.py test
 
-# Генерация HTML-отчёта покрытия и автоматическое открытие в браузере
-cov-html:
+cov-html:  ## Генерация HTML-отчёта покрытия и автоматическое открытие в браузере
 	coverage html & disown && start htmlcov/index.html
 
-# Проверка стиля кода
-lint:
-	flake8 authapp tasks
+lint:  ## Проверка стиля кода с ruff
+	ruff check $(SRC)
 
-# Форматирование кода
-format:
-	black authapp tasks  # отступы, кавычки, переносы строк
-	isort authapp tasks  # упорядочивает импорты
+format:  ## Форматирование кода с black (отступы, кавычки, переносы строк)
+	black $(SRC)
+	ruff check --fix $(SRC)
 
-# Очистка отчёта покрытия
-clean:
-	rd /s /q htmlcov 2>nul || exit 0
-	del .coverage 2>nul || exit 0
+check-comments:  ## Проверка docstring и комментариев
+	docformatter --check --recursive --black $(SRC)
 
-# Полная проверка (тесты, покрытие, линтинг)
-check: lint cov
+fix-comments:  ## Форматирование docstring и комментариев
+	@echo "Fixing comments and docstrings with docformatter..."
+	docformatter --in-place --wrap-summaries 88 --wrap-descriptions 88 --recursive $(SRC)
+
+clean:  ## Очистка отчёта покрытия
+	@echo "Cleaning coverage and temp files..."
+	@python -c "import shutil; shutil.rmtree('htmlcov', ignore_errors=True)"
+	@python -c "import os; import os; os.path.exists('.coverage') and os.remove('.coverage')"
+
+check: lint cov check-comments  ## Полная проверка (тесты, покрытие, линтинг)
 	coverage report --fail-under=80
 
+format-all: format fix-comments  ## Форматирование black и docformatter
 
-# .PHONY: test cov cov-html lint clean  # crossystems
-#
-# # Запуск стандартных Django тестов
-# test:
-# 	python manage.py test
-#
-# # Запуск тестов с замером покрытия
-# cov:
-# 	coverage run manage.py test
-#
-# # Генерация HTML-отчёта покрытия и автоматическое открытие в браузере
-# cov-html:
-# 	coverage html
-# 	python -m webbrowser htmlcov/index.html
-#
-# # Проверка стиля кода
-# lint:
-# 	flake8 authapp tasks
-# 	black --check authapp tasks
-# 	isort --check-only authapp tasks
-#
-# # Очистка отчёта покрытия и временных файлов
+help:
+	@grep -E '^[a-zA-Z_-]+:.*?## ' Makefile | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+
+
+# Очистка отчёта покрытия и временных файлов
 # clean:
 # 	-@rm -rf htmlcov .coverage __pycache__ .pytest_cache
 # # -@ предотвращает вывод ошибок при отсутствии файлов

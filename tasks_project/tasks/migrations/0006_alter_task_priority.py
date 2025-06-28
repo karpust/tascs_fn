@@ -6,13 +6,15 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tasks', '0005_comment'),
+        ("tasks", "0005_comment"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='task',
-            name='priority',
-            field=models.IntegerField(choices=[(1, 'low'), (2, 'medium'), (3, 'high')], default=1),
+            model_name="task",
+            name="priority",
+            field=models.IntegerField(
+                choices=[(1, "low"), (2, "medium"), (3, "high")], default=1
+            ),
         ),
     ]

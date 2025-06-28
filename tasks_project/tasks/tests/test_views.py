@@ -1,31 +1,38 @@
 from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.timezone import now
 from rest_framework import status
-from rest_framework.test import APITestCase, APIClient, force_authenticate
+from rest_framework.test import APIClient, APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
-from tasks.filters import TaskFilter
-from tasks.models import Task, Category, Tag, Comment
+
+from tasks.models import Category, Comment, Tag, Task
 
 User = get_user_model()
+
 
 class BaseTestCase(APITestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.category1 = Category.objects.create(name='New Category1')
-        cls.category2 = Category.objects.create(name='New Category2')
-        cls.category3 = Category.objects.create(name='Old Category3')
-        cls.tag1 = Tag.objects.create(name='some tag')
-        cls.tag2 = Tag.objects.create(name='just tag')
+        cls.category1 = Category.objects.create(name="New Category1")
+        cls.category2 = Category.objects.create(name="New Category2")
+        cls.category3 = Category.objects.create(name="Old Category3")
+        cls.tag1 = Tag.objects.create(name="some tag")
+        cls.tag2 = Tag.objects.create(name="just tag")
         cls.admin = cls.make_user("admin", "admin")
-        cls.manager = cls.make_user('manager', 'manager')
+        cls.manager = cls.make_user("manager", "manager")
         cls.user = cls.make_user("user", "user")
         cls.executor = cls.make_user("executor", "user")
-        cls.owner = cls.make_user('owner', 'manager')
-        cls.all_users = [cls.admin, cls.manager, cls.user, cls.executor, cls.owner]
+        cls.owner = cls.make_user("owner", "manager")
+        cls.all_users = [
+            cls.admin,
+            cls.manager,
+            cls.user,
+            cls.executor,
+            cls.owner,
+        ]
 
     @classmethod
     def make_user(cls, username, role):
@@ -34,31 +41,46 @@ class BaseTestCase(APITestCase):
         user.groups.set([group])
         return user
 
-    def make_authenticated(self, user):  # TODO этот же метод в authapp но с рефрешем: нужно убрать дублирование
-        """
-        состояние кук (access_token) привязано к тестовому клиенту self.client
-        при вызове self.client.get('/api/data/') автоматически передаются все куки,
-        которые были установлены ранее для юзера.
-        сервер берет куку и получает из ее токена юзера.
-        если выполнили self.make_authenticated(admin) в тесте, то теперь
-        все запросы через self.client будут аутентифицироваться как admin
-        чтобы тестировать разных пользователей в одном тесте, нужно пересоздавать клиент self.client = APIClient()
+    def make_authenticated(
+        self, user
+    ):  # TODO этот же метод в authapp но с рефрешем: нужно убрать дублирование
+        """Состояние кук (access_token) привязано к тестовому клиенту self.client при
+        вызове self.client.get('/api/data/') автоматически передаются все куки, которые
+        были установлены ранее для юзера. сервер берет куку и получает из ее токена
+        юзера. если выполнили self.make_authenticated(admin) в тесте, то теперь все
+        запросы через self.client будут аутентифицироваться как admin. чтобы тестировать
+        разных пользователей в одном тесте, нужно пересоздавать клиент.
+
+        self.client = APIClient()
         или делать перезапись кук - make_authenticated(другой юзер)
-        полностью перезаписывает все куки клиента, а не добавляет новые. Это жесткая замена, а не обновление.
+        полностью перезаписывает все куки клиента, а не добавляет новые.
+        Это жесткая замена, а не обновление.
         """
         self.access_token = str(AccessToken.for_user(user))
 
         # запись куки с токеном - это полная перезапись кук а не добавление:
-        self.client.cookies.load({
-            'access_token': self.access_token,
-            # 'refresh_token':
-        })
+        self.client.cookies.load(
+            {
+                "access_token": self.access_token,
+                # 'refresh_token':
+            }
+        )
         # добавляю параметры загруженному токену:
-        self.client.cookies['access_token']['httponly'] = True
-        self.client.cookies['access_token']['samesite'] = 'Lax'
+        self.client.cookies["access_token"]["httponly"] = True
+        self.client.cookies["access_token"]["samesite"] = "Lax"
 
-    def make_task(self, owner, executor, title="some task",
-                  description="some descriprion", deadline=timezone.now()+timedelta(days=1), status=1, priority=1, category=None, tags=None):
+    def make_task(
+        self,
+        owner,
+        executor,
+        title="some task",
+        description="some descriprion",
+        deadline=timezone.now() + timedelta(days=1),
+        status=1,
+        priority=1,
+        category=None,
+        tags=None,
+    ):
 
         task = Task.objects.create(
             title=title,
@@ -76,23 +98,46 @@ class BaseTestCase(APITestCase):
 
 class TaskFilterTest(BaseTestCase):
     def setUp(self):
-        self.task1 = self.make_task(owner=self.owner, executor=self.executor, title="Task title",
-                                    description="Task description", deadline=timezone.now() + timedelta(days=1),
-                                    status=1, priority=1, category=self.category1, tags=self.tag1)
-        self.task2 = self.make_task(owner=self.owner, executor=self.user, title="Design task",
-                                    description="Update design", deadline=timezone.now()+timedelta(days=2),
-                                    status=2, priority=2, category=self.category2, tags=self.tag2)
-        self.task3 = self.make_task(owner=self.owner, executor=self.executor, title="Testing",
-                                    description="Update homepage tests", deadline=timezone.now()+timedelta(days=3),
-                                    status=3, priority=3, category=self.category3, tags=self.tag1)
+        self.task1 = self.make_task(
+            owner=self.owner,
+            executor=self.executor,
+            title="Task title",
+            description="Task description",
+            deadline=timezone.now() + timedelta(days=1),
+            status=1,
+            priority=1,
+            category=self.category1,
+            tags=self.tag1,
+        )
+        self.task2 = self.make_task(
+            owner=self.owner,
+            executor=self.user,
+            title="Design task",
+            description="Update design",
+            deadline=timezone.now() + timedelta(days=2),
+            status=2,
+            priority=2,
+            category=self.category2,
+            tags=self.tag2,
+        )
+        self.task3 = self.make_task(
+            owner=self.owner,
+            executor=self.executor,
+            title="Testing",
+            description="Update homepage tests",
+            deadline=timezone.now() + timedelta(days=3),
+            status=3,
+            priority=3,
+            category=self.category3,
+            tags=self.tag1,
+        )
 
-        self.list_url = reverse('task-list')
+        self.list_url = reverse("task-list")
 
     def get_ids(self, response):
         # print(response.data)
         # print(response.json())
         return [t["id"] for t in response.json()["results"]]
-
 
     # def test_filter_by_status(self):
     #     self.make_authenticated(self.user)
@@ -161,7 +206,7 @@ class TaskFilterTest(BaseTestCase):
         self.make_authenticated(self.user)
         data = {
             "deadline_after": (timezone.now() + timedelta(days=0)).isoformat(),
-            "deadline_before": (timezone.now() + timedelta(days=2)).isoformat()
+            "deadline_before": (timezone.now() + timedelta(days=2)).isoformat(),
         }
         res = self.client.get(self.list_url, data)
         ids = self.get_ids(res)
@@ -192,15 +237,22 @@ class TaskFilterTest(BaseTestCase):
         self.assertEqual(set(ids), {self.task2.id, self.task3.id})
 
     def test_search_filter_comments(self):
-        comment1 = Comment.objects.create(text="simple comment", task=self.task1, author=self.owner)
-        comment2 = Comment.objects.create(text="super comment", task=self.task2, author=self.user)
-        comment3 = Comment.objects.create(text="super comment", task=self.task3, author=self.executor)
+        comment1 = Comment.objects.create(
+            text="simple comment", task=self.task1, author=self.owner
+        )
+        comment2 = Comment.objects.create(
+            text="super comment", task=self.task2, author=self.user
+        )
+        comment3 = Comment.objects.create(
+            text="super comment", task=self.task3, author=self.executor
+        )
 
         self.make_authenticated(self.user)
         res = self.client.get(self.list_url, {"search": "super comment"})
         ids = self.get_ids(res)
 
         self.assertEqual(set(ids), {comment2.id, comment3.id})
+        self.assertNotIn(comment1.id, set(ids))
 
     def test_search_filter_tag(self):
         self.make_authenticated(self.user)
@@ -291,13 +343,15 @@ class BaseTaskTestCase(BaseTestCase):
 
     def setUp(self):
         self.task = self.make_task(self.owner, self.executor)
-        self.list_url = reverse('task-list')
-        self.url = reverse('task-detail', args=[1])  # '/tasks/1/' # f'/tasks/{self.task.id}/'
+        self.list_url = reverse("task-list")
+        self.url = reverse(
+            "task-detail", args=[1]
+        )  # '/tasks/1/' # f'/tasks/{self.task.id}/'
         # self.url = reverse('task-detail', kwargs={'pk': self.task.pk})
 
 
 class TaskListViewTests(BaseTaskTestCase):
-    """доступ к api /tasks/ у всех авторизованных"""
+    """Доступ к api /tasks/ у всех авторизованных."""
 
     def test_list_as_authenticated(self):
         for user in self.all_users:
@@ -313,14 +367,14 @@ class TaskListViewTests(BaseTaskTestCase):
     def test_list_html_rendering(self):
         self.client = APIClient()
         self.make_authenticated(self.admin)  # перезаписываю куки
-        response = self.client.get(self.list_url, HTTP_ACCEPT='text/html')
+        response = self.client.get(self.list_url, HTTP_ACCEPT="text/html")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('<html', response.content.decode().lower())
+        self.assertIn("<html", response.content.decode().lower())
 
 
 class TaskDetailViewTests(BaseTaskTestCase):
-    """просматривать задачу могут все авторизованные"""
+    """Просматривать задачу могут все авторизованные."""
 
     def test_detail_as_authenticated(self):
         for user in self.all_users:
@@ -330,43 +384,43 @@ class TaskDetailViewTests(BaseTaskTestCase):
 
     def test_detail_unauthenticated(self):
         self.client = APIClient()  # удаляю куки
-        response = self.client.get(self.url )
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_detail_html_rendering(self):
         self.client = APIClient()
         self.make_authenticated(self.admin)  # перезаписываю куки
-        response = self.client.get(self.url, HTTP_ACCEPT='text/html')
+        response = self.client.get(self.url, HTTP_ACCEPT="text/html")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('<html', response.content.decode().lower())
+        self.assertIn("<html", response.content.decode().lower())
 
 
 class TaskCreateViewTests(BaseTaskTestCase):
-    """создавать задачу может только админ и менеджер"""
+    """Создавать задачу может только админ и менеджер."""
 
     def setUp(self):
         super().setUp()
         self.valid_data = {
-            'title': 'New task',
-            'description': 'New Description',
-            'status': 'done',
-            'priority': 'high',
-            'deadline': timezone.now() + timedelta(days=1),
-            'executor': [self.executor.id],
+            "title": "New task",
+            "description": "New Description",
+            "status": "done",
+            "priority": "high",
+            "deadline": timezone.now() + timedelta(days=1),
+            "executor": [self.executor.id],
         }
         self.invalid_data = {
-            'title': 'Invalid task',
-            'description': 'New Description',
-            'status': 'done',
-            'priority': 'high',
-            'deadline': timezone.now() + timedelta(days=1),
+            "title": "Invalid task",
+            "description": "New Description",
+            "status": "done",
+            "priority": "high",
+            "deadline": timezone.now() + timedelta(days=1),
         }
 
     def test_create_valid_data(self):
         self.make_authenticated(self.admin)
 
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Task.objects.count(), 2)
@@ -375,7 +429,7 @@ class TaskCreateViewTests(BaseTaskTestCase):
     def test_create_invalid_data(self):
         self.make_authenticated(self.admin)
 
-        response = self.client.post(self.list_url, self.invalid_data, format='json')
+        response = self.client.post(self.list_url, self.invalid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Task.objects.count(), 1)
@@ -384,7 +438,9 @@ class TaskCreateViewTests(BaseTaskTestCase):
     def test_create_task_missing_fields(self):
         self.make_authenticated(self.admin)
 
-        response = self.client.post(self.list_url, {"title": "Task missing fields"}, format='json')
+        response = self.client.post(
+            self.list_url, {"title": "Task missing fields"}, format="json"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Task.objects.count(), 1)
@@ -393,164 +449,164 @@ class TaskCreateViewTests(BaseTaskTestCase):
     def test_create_task_owner_add_automatically(self):
         self.make_authenticated(self.admin)
 
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Task.objects.latest('id').owner, self.admin)
+        self.assertEqual(Task.objects.latest("id").owner, self.admin)
 
     def test_create_as_admin(self):
         self.make_authenticated(self.admin)
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_create_as_manager(self):
         self.make_authenticated(self.manager)
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_create_as_user(self):
         self.make_authenticated(self.user)
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_create_unauthenticated(self):
         self.client = APIClient()
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class TaskPutViewTests(BaseTaskTestCase):
-    """полностью обновлять задачу может только админ и ее создатель"""
+    """Полностью обновлять задачу может только админ и ее создатель."""
 
     def setUp(self):
         super().setUp()
         self.valid_data = {
-            'title': 'New task',
-            'description': 'New Description',
-            'status': 'done',
-            'priority': 'high',
-            'deadline': timezone.now() + timedelta(days=1),
-            'executor': [self.executor.id],
+            "title": "New task",
+            "description": "New Description",
+            "status": "done",
+            "priority": "high",
+            "deadline": timezone.now() + timedelta(days=1),
+            "executor": [self.executor.id],
         }
         self.invalid_data = {
-            'title': 'Invalid task',
-            'description': 'New Description',
-            'status': 'super_done',
-            'priority': 3,
-            'deadline': timezone.now() + timedelta(days=1),
-            'executor': [self.executor.id],
+            "title": "Invalid task",
+            "description": "New Description",
+            "status": "super_done",
+            "priority": 3,
+            "deadline": timezone.now() + timedelta(days=1),
+            "executor": [self.executor.id],
         }
 
     def test_put_valid_data_as_admin(self):
         self.make_authenticated(self.admin)
 
-        response = self.client.put(self.url, self.valid_data, format='json')
+        response = self.client.put(self.url, self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Task.objects.latest('id').owner, self.owner)
+        self.assertEqual(Task.objects.latest("id").owner, self.owner)
 
     def test_put_invalid_data(self):
         self.make_authenticated(self.admin)
-        response = self.client.put(self.url, self.invalid_data, format='json')
+        response = self.client.put(self.url, self.invalid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_put_missing_fields(self):
         self.make_authenticated(self.admin)
-        response = self.client.put(self.url, {}, format='json')
+        response = self.client.put(self.url, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_put_as_owner(self):
         self.make_authenticated(self.owner)
 
-        response = self.client.put(self.url, self.valid_data, format='json')
+        response = self.client.put(self.url, self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Task.objects.latest('id').owner, self.owner)
+        self.assertEqual(Task.objects.latest("id").owner, self.owner)
 
     def test_put_as_forbidden_authenticated(self):
         for user in (self.manager, self.user, self.executor):
             self.make_authenticated(user)
-            response = self.client.put(self.url, self.valid_data, format='json')
+            response = self.client.put(self.url, self.valid_data, format="json")
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_put_unauthenticated(self):
         self.client = APIClient()
-        response = self.client.put(self.url, self.valid_data, format='json')
+        response = self.client.put(self.url, self.valid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class TaskPatchViewTests(BaseTaskTestCase):
-    """частично обновлять задачу могут админ, ее создатель и исполнитель(только поле status)"""
+    """Частично обновлять задачу могут админ, ее создатель и исполнитель(только поле
+    status)"""
 
     def setUp(self):
         super().setUp()
-        self.valid_data = {'title': 'Patched task'}
+        self.valid_data = {"title": "Patched task"}
         self.invalid_data = {
-            'title': 'Invalid task',
-            'priority': 4,
+            "title": "Invalid task",
+            "priority": 4,
         }
 
     def test_patch_valid_data_as_admin(self):
         self.make_authenticated(self.admin)
 
-        response = self.client.patch(self.url, self.valid_data, format='json')
+        response = self.client.patch(self.url, self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Task.objects.latest('id').title, 'Patched task')
+        self.assertEqual(Task.objects.latest("id").title, "Patched task")
 
     def test_patch_invalid_data(self):
         self.make_authenticated(self.admin)
 
-        response = self.client.patch(self.url, self.invalid_data, format='json')
+        response = self.client.patch(self.url, self.invalid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertNotEqual(Task.objects.latest('id').title, 'Patched task')
+        self.assertNotEqual(Task.objects.latest("id").title, "Patched task")
 
     def test_patch_not_changed_owner(self):
         self.make_authenticated(self.admin)
         self.assertEqual(self.task.owner, self.owner)
 
-        response = self.client.patch(self.url, {"owner": self.admin.id}, format='json')
+        response = self.client.patch(self.url, {"owner": self.admin.id}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.task.refresh_from_db() # обновляю данные объекта task из бд, если они были изменены
+        self.task.refresh_from_db()
         self.assertNotEqual(self.task.owner, self.admin)
         self.assertEqual(self.task.owner, self.owner)
 
     def test_patch_as_owner(self):
         self.make_authenticated(self.owner)
 
-        response = self.client.patch(self.url, self.valid_data, format='json')
+        response = self.client.patch(self.url, self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Task.objects.latest('id').owner, self.owner)
+        self.assertEqual(Task.objects.latest("id").owner, self.owner)
 
     def test_patch_allowed_fields_as_executor(self):
         self.make_authenticated(self.executor)
         data = {"status": "done"}
 
-        response = self.client.patch(self.url, data, format='json', partial=True)
+        response = self.client.patch(self.url, data, format="json", partial=True)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # self.assertEqual(self.executor, self.task.executor.filter(id=self.executor.id).first())
         self.assertTrue(self.task.executor.contains(self.executor))
-        self.assertEqual(Task.objects.latest('id').owner, self.owner)
+        self.assertEqual(Task.objects.latest("id").owner, self.owner)
 
     def test_patch_forbidden_authenticated_or_not_allowed_fields(self):
-        """to executor not allowed change fields except <status>"""
+        """To executor not allowed change fields except <status>"""
         for user in (self.user, self.executor, self.manager):
             self.make_authenticated(user)
-            response = self.client.patch(self.url, self.valid_data, format='json')
+            response = self.client.patch(self.url, self.valid_data, format="json")
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_patch_unauthenticated(self):
         self.client = APIClient()
-        response = self.client.patch(self.url, self.valid_data, format='json')
+        response = self.client.patch(self.url, self.valid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class TaskDeleteViewTests(BaseTaskTestCase):
-    """удалять задачу может только админ"""
+    """Удалять задачу может только админ."""
 
     def test_delete_as_admin(self):
         self.make_authenticated(self.admin)
@@ -573,7 +629,7 @@ class BaseCommentTestCase(BaseTestCase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.author = cls.make_user('author', 'User')
+        cls.author = cls.make_user("author", "User")
         cls.all_users.append(cls.author)
 
     def setUp(self):
@@ -582,13 +638,14 @@ class BaseCommentTestCase(BaseTestCase):
         # self.url = reverse('comment-detail', args=[1])
         # self.list_url = reverse('comment-list')
         # for nested-routers:
-        self.url = reverse('task-comments-detail', kwargs={'task_pk': self.task.id, 'pk': self.comment.id})
-        self.list_url = reverse('task-comments-list', kwargs={'task_pk': self.task.id})
+        self.url = reverse(
+            "task-comments-detail",
+            kwargs={"task_pk": self.task.id, "pk": self.comment.id},
+        )
+        self.list_url = reverse("task-comments-list", kwargs={"task_pk": self.task.id})
 
         self.valid_data = {"text": "New comment text"}
         self.invalid_data = {"text": ""}
-
-
 
     @classmethod
     def make_comment(cls, task, author, text="Comment text"):
@@ -601,7 +658,7 @@ class BaseCommentTestCase(BaseTestCase):
 
 
 class CommentListViewTests(BaseCommentTestCase):
-    """доступ к api /comments/ у всех авторизованных"""
+    """Доступ к api /comments/ у всех авторизованных."""
 
     def test_list_as_authenticated(self):
         for user in self.all_users:
@@ -616,7 +673,7 @@ class CommentListViewTests(BaseCommentTestCase):
 
 
 class CommentDetailViewTests(BaseCommentTestCase):
-    """просматривать комментарий могут все авторизованные"""
+    """Просматривать комментарий могут все авторизованные."""
 
     def test_detail_as_authenticated(self):
         for user in self.all_users:
@@ -631,12 +688,12 @@ class CommentDetailViewTests(BaseCommentTestCase):
 
 
 class CommentCreateViewTests(BaseCommentTestCase):
-    """создавать комментарии могут только админ и менеджер"""
+    """Создавать комментарии могут только админ и менеджер."""
 
     def test_create_comment_valid_data_by_owner(self):
         self.make_authenticated(self.owner)
 
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Comment.objects.count(), 2)
@@ -645,7 +702,7 @@ class CommentCreateViewTests(BaseCommentTestCase):
     def test_create_comment_invalid_data(self):
         self.make_authenticated(self.owner)
 
-        response = self.client.post(self.list_url, self.invalid_data, format='json')
+        response = self.client.post(self.list_url, self.invalid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Comment.objects.count(), 1)
@@ -654,7 +711,7 @@ class CommentCreateViewTests(BaseCommentTestCase):
     def test_create_comment_missing_fields(self):
         self.make_authenticated(self.owner)
 
-        response = self.client.post(self.list_url, {}, format='json')
+        response = self.client.post(self.list_url, {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Comment.objects.count(), 1)
@@ -663,16 +720,16 @@ class CommentCreateViewTests(BaseCommentTestCase):
     def test_create_comment_author_add_automatically(self):
         self.make_authenticated(self.owner)
 
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Comment.objects.latest('id').author, self.owner)
+        self.assertEqual(Comment.objects.latest("id").author, self.owner)
 
     def test_create_comment_by_executor(self):
         self.make_authenticated(self.executor)
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Comment.objects.latest('id').author, self.executor)
+        self.assertEqual(Comment.objects.latest("id").author, self.executor)
 
     def test_create_as_forbidden_authenticated(self):
         for user in (self.user, self.admin, self.manager):
@@ -682,30 +739,30 @@ class CommentCreateViewTests(BaseCommentTestCase):
 
     def test_create_unauthenticated(self):
         self.client = APIClient()
-        response = self.client.post(self.list_url, self.valid_data, format='json')
+        response = self.client.post(self.list_url, self.valid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class CommentPutViewTests(BaseCommentTestCase):
-    """полностью обновлять комментарий может только автор"""
+    """Полностью обновлять комментарий может только автор."""
 
     def test_put_valid_data_as_author(self):
         self.make_authenticated(self.author)
 
-        response = self.client.put(self.url, self.valid_data, format='json')
+        response = self.client.put(self.url, self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Comment.objects.latest('id').author, self.author)
+        self.assertEqual(Comment.objects.latest("id").author, self.author)
 
     def test_put_invalid_data(self):
         self.make_authenticated(self.author)
-        response = self.client.put(self.url, self.invalid_data, format='json')
+        response = self.client.put(self.url, self.invalid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_put_comment_missing_fields(self):
         self.make_authenticated(self.author)
 
-        response = self.client.put(self.url, {}, format='json')
+        response = self.client.put(self.url, {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(Comment.objects.filter(text="").exists())
@@ -713,17 +770,17 @@ class CommentPutViewTests(BaseCommentTestCase):
     def test_put_as_forbidden_authenticated(self):
         for user in (self.owner, self.admin, self.manager, self.user):
             self.make_authenticated(user)
-            response = self.client.put(self.url, self.valid_data, format='json')
+            response = self.client.put(self.url, self.valid_data, format="json")
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_put_as_unauthenticated(self):
         self.client = APIClient()
-        response = self.client.put(self.url, self.valid_data, format='json')
+        response = self.client.put(self.url, self.valid_data, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class CommentPatchViewTests(BaseCommentTestCase):
-    """частично изменять комментарий может только автор"""
+    """Частично изменять комментарий может только автор."""
 
     def test_patch_valid_data_as_author(self):
         self.make_authenticated(self.author)
@@ -731,7 +788,7 @@ class CommentPatchViewTests(BaseCommentTestCase):
         response = self.client.patch(self.url, {"text": "New comment Patch text"})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Comment.objects.latest('id').text, "New comment Patch text")
+        self.assertEqual(Comment.objects.latest("id").text, "New comment Patch text")
 
     def test_patch_invalid_data(self):
         self.make_authenticated(self.author)
@@ -742,7 +799,9 @@ class CommentPatchViewTests(BaseCommentTestCase):
         for user in self.all_users:
             if user.username != "author":
                 self.make_authenticated(user)
-                response = self.client.patch(self.url, {"text": "New comment Patch text"})
+                response = self.client.patch(
+                    self.url, {"text": "New comment Patch text"}
+                )
                 self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_patch_comment_as_unauthenticated(self):
@@ -780,6 +839,3 @@ class CommentDeleteViewTests(BaseCommentTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(Comment.objects.count(), 1)
-
-
-

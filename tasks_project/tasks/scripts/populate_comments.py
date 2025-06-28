@@ -8,4 +8,5 @@ def run():
         CommentFactory()
     print(f"{n} комментариев успешно созданы!")
 
+
 # python manage.py runscript populate_comments

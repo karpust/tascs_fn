@@ -1,6 +1,7 @@
 def run():
-    from django.contrib.auth.models import User, Group
-    from tasks.models import Comment, Task, Category
+    from django.contrib.auth.models import User
+
+    from tasks.models import Category, Comment, Task
 
     print("Удаляю комментарии...")
     Comment.objects.all().delete()

@@ -1,7 +1,7 @@
-from django.test import TestCase
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
-from django.dispatch import receiver
+from django.test import TestCase
+
 from authapp.models import UserProfile
 from authapp.signals import create_or_update_user_profile
 
@@ -9,21 +9,23 @@ from authapp.signals import create_or_update_user_profile
 class UserProfileSignalTest(TestCase):
 
     def setUp(self):
-        self.user = User.objects.create_user(username='testuser', password='testpassword')
+        self.user = User.objects.create_user(
+            username="testuser", password="testpassword"
+        )
         self.assertEqual(User.objects.count(), 1)
 
     def test_profile_created_on_user_creation(self):
-        """проверяет, что профиль создается автоматически при создании юзера"""
+        """Проверяет, что профиль создается автоматически при создании юзера."""
         self.assertEqual(UserProfile.objects.count(), 1)
         profile = UserProfile.objects.get(user=self.user)
         self.assertEqual(profile.user, self.user)
 
     def test_profile_not_created_when_signals_disabled(self):
-        """проверяет, что профиль не создается, если сигналы отключены"""
+        """Проверяет, что профиль не создается, если сигналы отключены."""
 
         # отключение сигнала и создание нового юзера:
         post_save.disconnect(create_or_update_user_profile, sender=User)
-        new_user = User.objects.create_user(username='newuser', password='testpassword')
+        new_user = User.objects.create_user(username="newuser", password="testpassword")
         self.assertEqual(User.objects.count(), 2)
 
         # проверка, что новый профиль не создался (только профиль из setUp):
@@ -34,20 +36,20 @@ class UserProfileSignalTest(TestCase):
         post_save.connect(create_or_update_user_profile, sender=User)
 
     def test_profile_persists_on_user_update(self):
-        """проверяет, что профиль сохраняется при обновлении юзера"""
+        """Проверяет, что профиль сохраняется при обновлении юзера."""
         # профиль от setUp:
         profile = UserProfile.objects.get(user=self.user)
         self.assertEqual(UserProfile.objects.count(), 1)
 
         # обновляю юзера:
-        self.user.username = 'updateduser'
+        self.user.username = "updateduser"
         self.user.save()
 
         # проверяю, что профиль остался привязан к юзеру, не создан новый:
         self.assertEqual(UserProfile.objects.count(), 1)
         updated_profile = UserProfile.objects.get(user=self.user)
         self.assertEqual(updated_profile, profile)
-        self.assertEqual(updated_profile.user.username, 'updateduser')
+        self.assertEqual(updated_profile.user.username, "updateduser")
 
     # def tearDown(self):
     #     """Очистка после тестов"""

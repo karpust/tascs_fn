@@ -1,17 +1,28 @@
 from django.test import SimpleTestCase
-from django.urls import reverse, resolve
-from authapp.views import RegisterAPIView, ConfirmRegisterAPIView, RepeatConfirmRegisterAPIView, LoginAPIView, \
-    LogoutAPIView, RefreshTokenAPIView, ResetPasswordAPIView, ChangePasswordAPIView
+from django.urls import resolve, reverse
+
+from authapp.views import (
+    ChangePasswordAPIView,
+    ConfirmRegisterAPIView,
+    LoginAPIView,
+    LogoutAPIView,
+    RefreshTokenAPIView,
+    RegisterAPIView,
+    RepeatConfirmRegisterAPIView,
+    ResetPasswordAPIView,
+)
 
 
-class URLTestCase(SimpleTestCase):  #?
+class URLTestCase(SimpleTestCase):  # ?
     def test_register_url_resolves(self):
-        """Проверка, что URL register/ вызывает правильную вью"""
+        """Проверка, что URL register/ вызывает правильную вью."""
         url = reverse("register")  # беру URL по имени
-        self.assertEqual(resolve(url).func.view_class, RegisterAPIView)  # resolve(url) ищет связанный вью
+        self.assertEqual(
+            resolve(url).func.view_class, RegisterAPIView
+        )  # resolve(url) ищет связанный вью
 
     def test_verify_email_url_resolves(self):
-        """Проверка, что url verify_email/ вызывает правильную вью"""
+        """Проверка, что url verify_email/ вызывает правильную вью."""
         url = reverse("confirm_register")
         self.assertEqual(resolve(url).func.view_class, ConfirmRegisterAPIView)
 
@@ -36,5 +47,8 @@ class URLTestCase(SimpleTestCase):  #?
         self.assertEqual(resolve(url).func.view_class, ResetPasswordAPIView)
 
     def test_change_password_url_resolves(self):
-        url = reverse("change_password", kwargs={"uid": 'some_uid', "token": 'some_token'})
+        url = reverse(
+            "change_password",
+            kwargs={"uid": "some_uid", "token": "some_token"},
+        )
         self.assertEqual(resolve(url).func.view_class, ChangePasswordAPIView)

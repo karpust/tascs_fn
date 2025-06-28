@@ -1,12 +1,11 @@
-from authapp.factories import UserFactory
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 
-
+from authapp.factories import UserFactory
 
 User = get_user_model()
 
 n = 50
+
 
 def run():
     # admin = User.objects.create_superuser(
@@ -22,6 +21,7 @@ def run():
             UserFactory(groups="manager")
         else:
             UserFactory()
-    print(f'{n} пользователей успешно созданы в базе')
+    print(f"{n} пользователей успешно созданы в базе")
+
 
 # python manage.py runscript populate_users

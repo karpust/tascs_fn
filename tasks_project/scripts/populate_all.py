@@ -5,15 +5,15 @@ from django.core.management import call_command
 
 def run():
     print("Создаю группы...")
-    call_command('runscript', 'populate_groups')
+    call_command("runscript", "populate_groups")
 
     print("Создаю пользователей...")
-    call_command('runscript', 'populate_users')
+    call_command("runscript", "populate_users")
 
     print("Создаю категории...")
-    call_command('runscript', 'populate_tasks')
+    call_command("runscript", "populate_tasks")
 
     print("Создаю задачи...")
-    call_command('runscript', 'populate_comments')
+    call_command("runscript", "populate_comments")
 
     print("Данные успешно заполнены!")

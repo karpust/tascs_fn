@@ -8,4 +8,5 @@ def run():
         TaskFactory()
     print(f"{n} задач успешно созданы!")
 
+
 # python manage.py runscript populate_tasks

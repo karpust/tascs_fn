@@ -1,41 +1,27 @@
 from datetime import timedelta
-import datetime
+
 from django.contrib.auth import get_user_model
-from django.test import TestCase, RequestFactory
-from rest_framework.test import APIRequestFactory
+from django.test import TestCase
 from django.utils.timezone import now
-from tasks.models import Task, Category, Tag, Comment
-from tasks.serializers import TaskSerializer, CommentSerializer, TagSerializer, CategorySerializer
+from rest_framework.test import APIRequestFactory
+
+from tasks.models import Category, Comment, Tag, Task
+from tasks.serializers import (
+    CategorySerializer,
+    CommentSerializer,
+    TagSerializer,
+    TaskSerializer,
+)
 
 User = get_user_model()
 
-"""
-тестирую только сериализатор, а не весь API,
-нужно создать "фейковый" запрос без запуска тестового сервера.
-не взаимодействуем с реальной БД через API, а только проверяем,
-как сериализатор работает с входными данными.
-что тестировать в сериализаторах:
-тестирование сериализации(instanse->dict):
-    при передаче сериализатору объекта модели 
-    он правильно преобразует его в словарь
-тестирование десериализации(dict->instanse):
-    тест с валидными данными:
-        (при передаче сериализатору валидные данных проходит ли он валидацию (is_valid() 
-        и правильные ли значения содержит validated_data)
-    тест с невалидными данными
-    тест с отстутствием обязательных полей
-    тест кастомной валидации
-"""
 
 class TaskSerializerTests(TestCase):
 
     def setUp(self):
-        """
-        предварительно создаю объекты юзера, тэга, категории;
-        использую их для создания объекта задачи;
-        но тк как task.owner передается автоматически из зароса
-        симулирую запрос, в который передаю юзера
-        """
+        """Предварительно создаю объекты юзера, тэга, категории; использую их для
+        создания объекта задачи; но тк как task.owner передается автоматически из зароса
+        симулирую запрос, в который передаю юзера."""
         self.some_user = User.objects.create(username="some_user")
         self.executor = User.objects.create(username="executor")
         self.owner = User.objects.create(username="owner")
@@ -45,20 +31,26 @@ class TaskSerializerTests(TestCase):
             "description": "This is a test task",
             "status": "to_do",
             "deadline": self.deadline,
-            "priority": 'high',
+            "priority": "high",
             "executor": [self.executor.pk],
             "category": "Work",
             "tags": ["Urgent", "Home"],
         }
-        factory = APIRequestFactory()  # использую фабрику для передачи юзера в контексте запроса
+        factory = (
+            APIRequestFactory()
+        )  # использую фабрику для передачи юзера в контексте запроса
         # self.request = self.factory.post("/tasks/", self.valid_data, format="json")
-        self.request = factory.post("/fake-request/")  # APIRequestFactory не использует маршрутизацию
+        self.request = factory.post(
+            "/fake-request/"
+        )  # APIRequestFactory не использует маршрутизацию
         self.request.user = self.owner
 
     def test_correct_serialization(self):
-        """проверяю, что сериализатор корректно сериализует объект"""
+        """Проверяю, что сериализатор корректно сериализует объект."""
         # создаю объект модели:
-        serializer = TaskSerializer(data=self.task_valid_data, context={"request": self.request})
+        serializer = TaskSerializer(
+            data=self.task_valid_data, context={"request": self.request}
+        )
         self.assertTrue(serializer.is_valid())
         task = serializer.save()
         # проверяю что owner добавился:
@@ -68,10 +60,10 @@ class TaskSerializerTests(TestCase):
             "id": 1,
             "title": "New Task",
             "description": "This is a test task",
-            "status": 'to_do',
+            "status": "to_do",
             "status_display": "to_do",
             "deadline": self.deadline.isoformat().replace("+00:00", "Z"),
-            "priority": 'high',
+            "priority": "high",
             "priority_display": "high",
             "executor": [self.executor.pk],
             "category": "Work",
@@ -79,7 +71,6 @@ class TaskSerializerTests(TestCase):
             # no owner bcz it's hidden field
         }
         serializer = TaskSerializer(instance=task)
-
 
         self.assertEqual(serializer.data["id"], expected_data["id"])
         self.assertEqual(serializer.data["title"], expected_data["title"])
@@ -95,24 +86,33 @@ class TaskSerializerTests(TestCase):
 
     def test_update_task_with_new_tags_and_category(self):
         # create task:
-        serializer = TaskSerializer(data=self.task_valid_data, context={"request": self.request})
+        serializer = TaskSerializer(
+            data=self.task_valid_data, context={"request": self.request}
+        )
         self.assertTrue(serializer.is_valid())
         task = serializer.save()
 
         # update some data in task:
-        updated_data = {"tags": ["UpdatedUrgent", "Home"], "category": "UpdatedWork"}
+        updated_data = {
+            "tags": ["UpdatedUrgent", "Home"],
+            "category": "UpdatedWork",
+        }
         serializer = TaskSerializer(instance=task, data=updated_data, partial=True)
         self.assertTrue(serializer.is_valid())
         task = serializer.save()
 
         # check data:
-        self.assertEqual(task.category.name, "UpdatedWork" )
-        self.assertEqual(set(tag.name for tag in task.tags.all()), {"Updatedurgent", "Home"})
+        self.assertEqual(task.category.name, "UpdatedWork")
+        self.assertEqual(
+            set(tag.name for tag in task.tags.all()), {"Updatedurgent", "Home"}
+        )
         self.assertEqual(task.title, self.task_valid_data["title"])
         self.assertEqual(task.description, self.task_valid_data["description"])
 
     def test_to_representation_for_tags_and_category_names(self):
-        serializer = TaskSerializer(data=self.task_valid_data, context={"request": self.request})
+        serializer = TaskSerializer(
+            data=self.task_valid_data, context={"request": self.request}
+        )
         self.assertTrue(serializer.is_valid())
         serializer.save()
 
@@ -120,24 +120,38 @@ class TaskSerializerTests(TestCase):
         self.assertEqual(serializer.data["category"], "Work")
 
     def test_deserialization_valid_data(self):
-        """проверяю корректность десериализации валидных данных"""
-        serializer = TaskSerializer(data=self.task_valid_data, context={"request": self.request})
+        """Проверяю корректность десериализации валидных данных."""
+        serializer = TaskSerializer(
+            data=self.task_valid_data, context={"request": self.request}
+        )
 
         self.assertTrue(serializer.is_valid())
 
-        self.assertEqual(serializer.validated_data["title"], self.task_valid_data["title"])
-        self.assertEqual(serializer.validated_data["description"], self.task_valid_data["description"])
-        self.assertEqual(serializer.initial_data["status"], 'to_do')
-        self.assertEqual(serializer.validated_data["status"], 1)  # self.task_valid_data["status"]
-        self.assertEqual(serializer.validated_data["deadline"], self.task_valid_data["deadline"])
+        self.assertEqual(
+            serializer.validated_data["title"], self.task_valid_data["title"]
+        )
+        self.assertEqual(
+            serializer.validated_data["description"],
+            self.task_valid_data["description"],
+        )
+        self.assertEqual(serializer.initial_data["status"], "to_do")
+        self.assertEqual(
+            serializer.validated_data["status"], 1
+        )  # self.task_valid_data["status"]
+        self.assertEqual(
+            serializer.validated_data["deadline"],
+            self.task_valid_data["deadline"],
+        )
         self.assertEqual(serializer.validated_data["priority"], 3)
         self.assertEqual(serializer.validated_data["executor"], [self.executor])
         self.assertEqual(serializer.validated_data["category"], "Work")
         self.assertEqual(serializer.validated_data["tags"], ["Urgent", "Home"])
 
     def test_get_owner_from_request(self):
-        """проверяю, что owner добавляется из запроса"""
-        serializer = TaskSerializer(data=self.task_valid_data, context={'request': self.request})
+        """Проверяю, что owner добавляется из запроса."""
+        serializer = TaskSerializer(
+            data=self.task_valid_data, context={"request": self.request}
+        )
         serializer.is_valid(raise_exception=True)
         task = serializer.save()
 
@@ -146,7 +160,7 @@ class TaskSerializerTests(TestCase):
         self.assertEqual(task.owner, self.owner)
 
     def test_deserialization_invalid_data(self):
-        """Проверяю, что сериализатор не валидирует некорректные данные"""
+        """Проверяю, что сериализатор не валидирует некорректные данные."""
 
         invalid_data = {
             "title": "N",
@@ -155,11 +169,13 @@ class TaskSerializerTests(TestCase):
             "deadline": 1,
             "priority": 4,
             "executor": [self.executor],
-            "category": '',
-            "tags": [''],
+            "category": "",
+            "tags": [""],
         }
 
-        serializer = TaskSerializer(data=invalid_data, context={'request': self.request})
+        serializer = TaskSerializer(
+            data=invalid_data, context={"request": self.request}
+        )
 
         serializer.is_valid()
         self.assertIn("status", serializer.errors)
@@ -172,7 +188,9 @@ class TaskSerializerTests(TestCase):
     def test_missing_required_field(self):
         invalid_data = {}
 
-        serializer = TaskSerializer(data=invalid_data, context={'request': self.request})
+        serializer = TaskSerializer(
+            data=invalid_data, context={"request": self.request}
+        )
         serializer.is_valid()
 
         # required fields:
@@ -191,9 +209,10 @@ class CommentSerializerTest(TestCase):
         # create task object:
         task_data = {
             "title": "New Task",
-            "deadline":"2024-04-06T10:00:00Z",
-            # "executor": [self.user.pk],  # m2m в бд может быть пустым, но если сериализовать-будет ошибка
-            "owner": self.user, # для бд, не для сериализации
+            "deadline": "2024-04-06T10:00:00Z",
+            # "executor": [self.user.pk],  # m2m в бд может быть пустым,
+            # но если сериализовать-будет ошибка
+            "owner": self.user,  # для бд, не для сериализации
         }
 
         self.factory = APIRequestFactory()
@@ -203,8 +222,10 @@ class CommentSerializerTest(TestCase):
         self.comment_valid_data = {"text": "New Comment"}
 
     def test_correct_serialization(self):
-        """проверяю корректность сериализации объекта"""
-        comment = Comment.objects.create(task=self.task, text="New Comment", author=self.user)
+        """Проверяю корректность сериализации объекта."""
+        comment = Comment.objects.create(
+            task=self.task, text="New Comment", author=self.user
+        )
         expected_data = {
             "id": 1,
             "task": self.task.pk,
@@ -221,8 +242,11 @@ class CommentSerializerTest(TestCase):
         self.assertNotIn("author", serializer.data)  # HiddenField
 
     def test_deserialization_valid_data(self):
-        """проверяю корректность десериализации валидных данных"""
-        serializer = CommentSerializer(data={"text": "New Comment", "task": self.task}, context={"request": self.request})
+        """Проверяю корректность десериализации валидных данных."""
+        serializer = CommentSerializer(
+            data={"text": "New Comment", "task": self.task},
+            context={"request": self.request},
+        )
         # проверяю начальные данные:
         self.assertIn("task", serializer.initial_data)  # !
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -230,9 +254,12 @@ class CommentSerializerTest(TestCase):
         # проверяю что сериализатор добавил автора(HiddenField):
         self.assertIn("author", serializer.validated_data)
         # но задача добавляется вьюшкой:
-        self.assertNotIn("task", serializer.validated_data)  # task is read-only field
+        self.assertNotIn("task", serializer.validated_data)
+        # task is read-only field
         # created_at после сохраниения объекта в бд:
-        self.assertNotIn("created_at", serializer.validated_data)  # объект еще не сохранен
+        self.assertNotIn(
+            "created_at", serializer.validated_data
+        )  # объект еще не сохранен
 
         serializer.save(task=self.task)  # имитирую добавление задачи вьюшкой
 
@@ -243,8 +270,10 @@ class CommentSerializerTest(TestCase):
         self.assertIsInstance(serializer.data["created_at"], str)
 
     def test_get_author_from_request(self):
-        """проверяю, что author добавляется из запроса"""
-        serializer = CommentSerializer(data=self.comment_valid_data, context={'request': self.request})
+        """Проверяю, что author добавляется из запроса."""
+        serializer = CommentSerializer(
+            data=self.comment_valid_data, context={"request": self.request}
+        )
         serializer.is_valid(raise_exception=True)
         self.assertIn("author", serializer.validated_data)
         comment = serializer.save(task=self.task)
@@ -254,12 +283,14 @@ class CommentSerializerTest(TestCase):
         self.assertEqual(comment.author, self.user)
 
     def test_deserialization_invalid_data(self):
-        serializer = CommentSerializer(data={"text":""}, context={'request': self.request})
+        serializer = CommentSerializer(
+            data={"text": ""}, context={"request": self.request}
+        )
         serializer.is_valid()
         self.assertIn("text", serializer.errors)
 
     def test_missing_required_field(self):
-        serializer = CommentSerializer(data={}, context={'request': self.request})
+        serializer = CommentSerializer(data={}, context={"request": self.request})
         serializer.is_valid()
 
         self.assertIn("text", serializer.errors)
@@ -272,7 +303,7 @@ class CategorySerializerTest(TestCase):
         self.category_data = {"name": "Test Category"}
 
     def test_correct_serialization(self):
-        """проверяю корректность сериализацию объекта"""
+        """Проверяю корректность сериализацию объекта."""
         category = Category.objects.create(**self.category_data)
         expected_data = {"id": category.pk, "name": category.name}
 
@@ -281,14 +312,14 @@ class CategorySerializerTest(TestCase):
         self.assertEqual(serializer.data, expected_data)
 
     def test_deserialization_valid_data(self):
-        """проверяю корректность десериализации валидных данных"""
+        """Проверяю корректность десериализации валидных данных."""
         serializer = CategorySerializer(data=self.category_data)
 
         self.assertTrue(serializer.is_valid())
         self.assertEqual(serializer.validated_data["name"], self.category_data["name"])
 
     def test_deserialization_invalid_data(self):
-        """проверяю корректность десериализации невалидных данных"""
+        """Проверяю корректность десериализации невалидных данных."""
         invalid_data = {"name": ""}  # can not be empty
 
         serializer = CategorySerializer(data=invalid_data)
@@ -310,7 +341,7 @@ class TagSerializerTest(TestCase):
         self.tag_data = {"name": "Test Tag"}
 
     def test_correct_serialization(self):
-        """проверяю корректность сериализации объекта"""
+        """Проверяю корректность сериализации объекта."""
         tag = Tag.objects.create(**self.tag_data)
         expected_data = {"id": tag.pk, "name": tag.name}
 
@@ -319,14 +350,14 @@ class TagSerializerTest(TestCase):
         self.assertEqual(serializer.data, expected_data)
 
     def test_deserialization_valid_data(self):
-        """проверяю корректность десериализации валидных данных"""
+        """Проверяю корректность десериализации валидных данных."""
         serializer = TagSerializer(data=self.tag_data)
 
         self.assertTrue(serializer.is_valid())
         self.assertEqual(serializer.validated_data["name"], self.tag_data["name"])
 
     def test_deserialization_invalid_data(self):
-        """проверяю корректность десериализации невалидных данных"""
+        """Проверяю корректность десериализации невалидных данных."""
         invalid_data = {"name": ""}  # name should not be empty
 
         serializer = TagSerializer(data=invalid_data)
@@ -340,6 +371,3 @@ class TagSerializerTest(TestCase):
 
         self.assertIn("name", serializer.errors)
         self.assertFalse(serializer.is_valid())
-
-
-

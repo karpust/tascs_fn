@@ -1,5 +1,23 @@
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+exclude = [
+  ".git",
+  "__pycache__",
+  "migrations",
+  ".venv",
+  "env",
+  "htmlcov",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]  # E = style errors, F = flakes, I = import order
+
 [tool.coverage.run]
-source = ["authapp", "tasks"]
 omit = ["*/migrations/*", "*/tests/*", "*/__init__.py", "manage.py"]
 
 [tool.coverage.report]

@@ -7,18 +7,20 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tasks', '0002_task_executor_alter_task_owner'),
+        ("tasks", "0002_task_executor_alter_task_owner"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='task',
-            name='executor',
+            model_name="task",
+            name="executor",
         ),
         migrations.AddField(
-            model_name='task',
-            name='executor',
-            field=models.ManyToManyField(related_name='task_executors', to=settings.AUTH_USER_MODEL),
+            model_name="task",
+            name="executor",
+            field=models.ManyToManyField(
+                related_name="task_executors", to=settings.AUTH_USER_MODEL
+            ),
         ),
     ]
