@@ -32,9 +32,13 @@ jobs:
       working-directory: tasks_project
       run: make lint
 
+    - name: Create .env for CI
+      working-directory: tasks_project
+      run: cp .env.example .env
+
     - name: Check for missing migrations
       working-directory: tasks_project
-      run: SECRET_KEY=dummy_for_ci python manage.py makemigrations --check --dry-run
+      run: python manage.py makemigrations --check --dry-run
 
     - name: Run tests with coverage and checks
       working-directory: tasks_project
