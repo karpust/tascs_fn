@@ -976,3 +976,17 @@
 [2025-06-28 17:38:06] [INFO] [SUCCESS] Type: reset_password_confirmation | Email: some_user@example.com
 [2025-06-28 17:38:07] [INFO] [SEND EMAIL TASK CODE STARTED]
 [2025-06-28 17:38:07] [INFO] [SUCCESS] Type: reset_password_confirmation | Email: some_user@example.com
+[2025-06-28 20:41:33] [INFO] [DELETE UNCONFIRMED USERS CODE STARTED
+[2025-06-28 20:41:33] [INFO] [SUCCESS] Deleted 1 unconfirmed users
+[2025-06-28 20:41:33] [INFO] [SEND EMAIL TASK CODE STARTED]
+[2025-06-28 20:41:33] [INFO] [SUCCESS] Type: register_confirmation | Email: user@email.com
+[2025-06-28 20:41:33] [INFO] [SEND EMAIL TASK CODE STARTED]
+[2025-06-28 20:41:33] [INFO] [SUCCESS] Type: repeat_register_confirmation | Email: user@email.com
+[2025-06-28 20:41:33] [INFO] [SEND EMAIL TASK CODE STARTED]
+[2025-06-28 20:41:33] [INFO] [SUCCESS] Type: reset_password_confirmation | Email: user@email.com
+[2025-06-28 20:41:49] [INFO] [SEND EMAIL TASK CODE STARTED]
+[2025-06-28 20:41:49] [INFO] [SUCCESS] Type: register_confirmation | Email: test@example.com
+[2025-06-28 20:41:52] [INFO] [SEND EMAIL TASK CODE STARTED]
+[2025-06-28 20:41:52] [INFO] [SUCCESS] Type: reset_password_confirmation | Email: some_user@example.com
+[2025-06-28 20:41:53] [INFO] [SEND EMAIL TASK CODE STARTED]
+[2025-06-28 20:41:53] [INFO] [SUCCESS] Type: reset_password_confirmation | Email: some_user@example.com
