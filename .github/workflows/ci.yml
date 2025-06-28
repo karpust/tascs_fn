@@ -25,13 +25,13 @@ jobs:
         pip install coverage pre-commit
 
     - name: Run pre-commit hooks
-      run: pre-commit run --all-files
+      run: tasks_project/pre-commit run --all-files
           
     - name: Lint with ruff
-      run: make lint
+      run: tasks_project/make lint
 
     - name: Check for missing migrations
-      run: python manage.py makemigrations --check --dry-run
+      run: tasks_project/python manage.py makemigrations --check --dry-run
 
     - name: Run tests with coverage and checks
-      run: make check
+      run: tasks_project/make check
